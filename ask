@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Single entry point: ./ask
+# Activates the environment and launches the interactive REPL.
+
+SCRIPT="$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null || echo "$0")"
+DIR="$(cd "$(dirname "$SCRIPT")" && pwd)"
+cd "$DIR"
+
+if [ ! -d .venv ]; then
+    echo "  Virtual environment not found. Run setup first:"
+    echo "    bash setup.sh"
+    exit 1
+fi
+
+if [ ! -f .venv/bin/activate ]; then
+    echo "  Broken virtual environment (missing .venv/bin/activate)."
+    echo "  Delete it and re-run setup:"
+    echo "    rm -rf .venv && bash setup.sh"
+    exit 1
+fi
+
+source .venv/bin/activate
+
+# Ensure TERM is set so readline handles arrow keys over SSH
+: "${TERM:=xterm-256color}"
+export TERM
+
+# Export .env vars if file exists; ask.py handles missing keys interactively
+if [ -f .env ]; then
+    set -a
+    source .env
+    set +a
+fi
+
+exec python3 gaia_tools/ask.py "$@"

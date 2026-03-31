@@ -1,0 +1,35 @@
+# Environment and secrets
+.venv/
+.env
+*.env.local
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Runtime artifacts
+logs/
+runs/
+*.log
+*.pid
+.benchmark.lock
+.test-tmp/
+gaia_results.json
+gaia_summary.json
+
+# GAIA dataset (gated, downloaded by setup.sh)
+gaia_questions.json
+gaia_files/
+
+# Model cache
+.cache/
+huggingface/
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

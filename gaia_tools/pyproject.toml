@@ -1,0 +1,26 @@
+[build-system]
+build-backend = "setuptools.build_meta"
+requires = ["setuptools>=64"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[project]
+name = "gaia_tools"
+version = "0.1.0"
+requires-python = ">=3.11,<3.14"
+description = "Custom GAIA benchmark tools for NeMo Agent Toolkit"
+dependencies = [
+    "nvidia-nat[langchain]",
+    "requests",
+    "beautifulsoup4",
+    "pypdf",
+    "openai",
+    "nvidia-riva-client",
+    "huggingface_hub",
+    "python-chess",
+    "youtube-transcript-api",
+]
+
+[project.entry-points.'nat.components']
+gaia_tools = "gaia_tools.register"
