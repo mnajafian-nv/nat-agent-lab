@@ -54,7 +54,7 @@ Type `level 1` to see all Level 1 questions. Type `level` to see a summary of al
 
 **3. Open Phoenix (traces)**
 
-Open Phoenix **before** running agent comparisons so traces are captured from the start.
+Open Phoenix **before** running agent comparisons so you can see traces as they come in. If Phoenix shows `off` in the status line, typing `tracing` starts it automatically.
 
 ```
 ask [1]> tracing
@@ -66,16 +66,17 @@ This opens Phoenix in your browser. If you are on a remote machine (Brev, GCP), 
 ssh -L 6006:localhost:6006 <your-ssh-host>
 ```
 
-Then open [http://localhost:6006](http://localhost:6006). Keep Phoenix open in a browser tab. Every agent run from this point forward will appear as a trace. If Phoenix is down, agents still work normally (you just won't see the traces).
+Then open [http://localhost:6006](http://localhost:6006). Keep Phoenix open in a browser tab. Phoenix has been collecting traces since setup, so your runs from steps 1 and 2 are already there. If Phoenix is down, agents still work normally (you just won't see the traces).
 
 **4. Run all 4 agents on the same question and compare**
 
+*(Path B users: you only have one agent (ultrafast-nogpu) and already ran it in step 2. Skip to step 5.)*
+
 Pick a GAIA validation question (not a freeform one) so you have an expected answer to judge correctness, not just fluency. `level 1, 1` is a good choice: it requires multiple tool calls and computation, which is where architecture differences show up. Run it with each agent, note the answer, the time, and which tools were called. Switch clears memory so each comparison is fair.
 
-You start on the default agent (ultrafast if vLLM is running). The sequence below runs all 4 agents. *(Path B users: you only have ultrafast-nogpu. Skip to step 5.)*
+You already ran `level 1, 1` on the default agent in step 2, so that trace is in Phoenix. Now run the same question on the other 3 agents.
 
 ```
-ask [1]> level 1, 1
 ask [1]> switch single
 ask> level 1, 1
 ask [1]> switch multi
@@ -93,7 +94,7 @@ What to look for in each comparison:
 | **Ultrafast** *(default)* | Your baseline. Look at how the system prompt classifies the question before any tool call. |
 | **Single** | No routing step. Does it call tools that Ultrafast's routing would have skipped? More or fewer LLM round-trips? |
 | **Multi** | Extra LLM call for orchestrator routing. Is the routing accurate? Is the specialist's focused context worth the added latency? |
-| **Ultrafast-nogpu** | Same prompt as Ultrafast, but cloud LLM. Compare network latency vs. local GPU, and answer quality across different model weights. *(Optional, requires NGC_API_KEY.)* |
+| **Ultrafast-nogpu** | Same prompt as Ultrafast, but cloud LLM. Compare network latency vs. local GPU, and answer quality across different model weights. *(This step is optional; the NGC_API_KEY is still needed for vision/audio tools.)* |
 
 **Bonus (if time permits):** run the same 4-agent comparison on a simple factual question like "What is the capital of France?" (zero tools needed, pure LLM knowledge). All 4 agents should answer instantly and correctly. If Multi is noticeably slower, that is the cost of orchestrator overhead on a question that didn't need routing.
 
@@ -101,14 +102,13 @@ The lesson: the best agent architecture depends on the task distribution. Flat a
 
 **5. Run the benchmark and establish a baseline score**
 
-The benchmark runs whichever agent is currently loaded. Switch to the one you want to score first:
+Type `benchmark` and pick the agent you want to score:
 
 ```
-ask [1]> switch ultrafast
-ask> benchmark
+ask [1]> benchmark
 ```
 
-This runs 20 scored questions (~15 min), submits your answers, and your team name appears on the [public leaderboard](https://huggingface.co/spaces/agents-course/Students_Leaderboard) within seconds. It will ask for your org and team name (e.g., `UCB` / `AgentSmiths`), and your entry shows up as `NAT-UCB-AgentSmiths-UltrafastAgent`. While it runs, go back to Phoenix and dig into the traces from step 4. This is your baseline score to beat in step 6.
+This runs 20 scored questions (~15 min), submits your answers, and your team appears on the [public leaderboard](https://huggingface.co/spaces/agents-course/Students_Leaderboard) within seconds. It will prompt for your org and team name, and the agent suffix is added automatically, so the leaderboard entry follows the format `NAT-<org name>-<team name>-<agent name>` (e.g., `NAT-UCB-TeamAlpha-Ultrafast`). While the benchmark runs, go back to Phoenix and dig into the traces from step 4. This is your baseline score to beat in step 6.
 
 **6. Build your own agent and compete**
 
@@ -118,8 +118,11 @@ In a terminal (not inside `./ask`):
 
 ```bash
 mkdir my-agent
+# Path A (GPU): start from the ultrafast config
 cp ultrafast-agent/gaia_agent_ultrafast.yml my-agent/config.yml
-# Edit config.yml: refine the system prompt, add/remove tools, change the agent type
+# Path B (no GPU): start from the ultrafast-nogpu config
+cp ultrafast-nogpu-agent/gaia_agent_ultrafast_nogpu.yml my-agent/config.yml
+# Then edit config.yml: refine the system prompt, add/remove tools, change the agent type
 ```
 
 Then load it inside `./ask`:
@@ -233,7 +236,7 @@ bash setup.sh --cloud                # ~5 min; prompts for API keys, skips model
 ./ask                                # verify status line shows all OK
 ```
 
-You should see `Agent: ultrafast-nogpu | vLLM: off (not needed) | NAT: OK | Phoenix: off | Verbose: ON`. Only the ultrafast-nogpu agent is available (the other 3 need local vLLM).
+You should see `Agent: ultrafast-nogpu | vLLM: off (not needed) | NAT: OK | Phoenix: off | Verbose: ON`. Only the ultrafast-nogpu agent is available (the other 3 need local vLLM). Phoenix starts on demand when you type `tracing`.
 
 ### API Keys
 
