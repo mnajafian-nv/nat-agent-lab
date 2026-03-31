@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 [build-system]
 build-backend = "setuptools.build_meta"
 requires = ["setuptools>=64"]
@@ -11,7 +14,7 @@ version = "0.1.0"
 requires-python = ">=3.11,<3.14"
 description = "Custom GAIA benchmark tools for NeMo Agent Toolkit"
 dependencies = [
-    "nvidia-nat[langchain]",
+    "nvidia-nat[langchain]==1.5.0",
     "requests",
     "beautifulsoup4",
     "pypdf",

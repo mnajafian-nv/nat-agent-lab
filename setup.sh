@@ -125,9 +125,9 @@ if python3 -c "import nat; import datasets; import openpyxl; import bs4; import 
     ok "NAT and dependencies already installed"
 else
     log "Installing NAT and dependencies..."
-    uv pip install "nvidia-nat[langchain,phoenix]" arize-phoenix requests pyyaml datasets \
+    uv pip install "nvidia-nat[langchain,phoenix]==1.5.0" arize-phoenix requests pyyaml datasets \
         openpyxl beautifulsoup4 pypdf python-pptx sympy 2>/dev/null \
-        || pip install "nvidia-nat[langchain,phoenix]" arize-phoenix requests pyyaml datasets \
+        || pip install "nvidia-nat[langchain,phoenix]==1.5.0" arize-phoenix requests pyyaml datasets \
         openpyxl beautifulsoup4 pypdf python-pptx sympy
     ok "NAT installed"
 fi
@@ -147,8 +147,8 @@ else
         ok "vLLM already installed"
     else
         log "Installing vLLM (this may take a few minutes)..."
-        uv pip install vllm --torch-backend=auto 2>/dev/null \
-            || pip install vllm
+        uv pip install "vllm==0.18.0" --torch-backend=auto 2>/dev/null \
+            || pip install "vllm==0.18.0"
         ok "vLLM installed"
     fi
 fi
