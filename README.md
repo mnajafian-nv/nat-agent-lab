@@ -20,7 +20,7 @@ The repo includes four agents that score 85-90% on the leaderboard. They are sta
 ## Quick Start
 
 ```bash
-git clone <repo-url> nat-agent-lab
+git clone https://github.com/mnajafian-nv/nat-agent-lab.git nat-agent-lab
 cd nat-agent-lab
 bash setup.sh          # ~20 min; prompts for API keys, downloads model
 ./ask                  # start chatting
@@ -156,10 +156,10 @@ All four agents share the same tools: `internet_search`, `wiki_search`, `read_fi
 
 | Agent | Config | Architecture | LLM | Key difference |
 |-------|--------|-------------|-----|----------------|
-| **Single** | `single-agent/gaia_agent.yml` | `tool_calling_agent`, flat: LLM has direct access to all tools | MiniMax M2.5 456B MoE (local vLLM) | Simplest. One LLM call per tool step. No routing overhead. |
-| **Multi** | `multi-agent/gaia_agent_multi.yml` | `tool_calling_agent` orchestrator dispatches to 3 specialist sub-agents (web, file, multimedia), each with isolated tool subsets | MiniMax M2.5 456B MoE (local vLLM) | Extra LLM call for routing, but specialists have focused prompts and tools. |
-| **Ultrafast** | `ultrafast-agent/gaia_agent_ultrafast.yml` | `tool_calling_agent`, flat: embedded TYPE A/B/C/D routing decision tree in the system prompt classifies questions before any tool call | MiniMax M2.5 456B MoE (local vLLM) | Same flat architecture as Single, but prompt-driven routing eliminates the orchestrator LLM call. |
-| **Ultrafast-nogpu** | `ultrafast-nogpu-agent/gaia_agent_ultrafast_nogpu.yml` | Same as Ultrafast, but LLM inference runs on NVIDIA Build instead of local vLLM | Qwen 3.5-122B-A10B MoE (NVIDIA Build) | No GPU, no model download, no VRAM. Higher latency, 4096 max output tokens, uses API credits. |
+| **Single** | [`single-agent/gaia_agent.yml`](single-agent/gaia_agent.yml) | `tool_calling_agent`, flat: LLM has direct access to all tools | MiniMax M2.5 456B MoE (local vLLM) | Simplest. One LLM call per tool step. No routing overhead. |
+| **Multi** | [`multi-agent/gaia_agent_multi.yml`](multi-agent/gaia_agent_multi.yml) | `tool_calling_agent` orchestrator dispatches to 3 specialist sub-agents (web, file, multimedia), each with isolated tool subsets | MiniMax M2.5 456B MoE (local vLLM) | Extra LLM call for routing, but specialists have focused prompts and tools. |
+| **Ultrafast** | [`ultrafast-agent/gaia_agent_ultrafast.yml`](ultrafast-agent/gaia_agent_ultrafast.yml) | `tool_calling_agent`, flat: embedded TYPE A/B/C/D routing decision tree in the system prompt classifies questions before any tool call | MiniMax M2.5 456B MoE (local vLLM) | Same flat architecture as Single, but prompt-driven routing eliminates the orchestrator LLM call. |
+| **Ultrafast-nogpu** | [`ultrafast-nogpu-agent/gaia_agent_ultrafast_nogpu.yml`](ultrafast-nogpu-agent/gaia_agent_ultrafast_nogpu.yml) | Same as Ultrafast, but LLM inference runs on NVIDIA Build instead of local vLLM | Qwen 3.5-122B-A10B MoE (NVIDIA Build) | No GPU, no model download, no VRAM. Higher latency, 4096 max output tokens, uses API credits. |
 
 Each agent is defined entirely by its YAML config: agent type, system prompt, tools, and model parameters. NAT supports additional architectures beyond `tool_calling_agent` (e.g., `react_agent`, `router_agent`, `sequential_executor`). See step 6 for how to experiment with them.
 
@@ -186,14 +186,12 @@ Type `help` in `./ask` for the full list. Key commands:
 | `level <L>` | Show Level L questions (1, 2, or 3) |
 | `level <L>, <N>` | Run question N from Level L (e.g., `level 1, 3`) |
 | `benchmark [agent]` | Run 20-question scored leaderboard |
-| `switch [agent]` | Pick from built-in agents or pass your own YAML (`switch my-agent/config.yml`). Clears memory. |
+| `switch [agent]` | Switch to a built-in agent or load your own config (`switch my-agent/config.yml`). Clears memory. |
 | `clear` | Reset conversation memory |
 | `info` | Current agent, model, and tools |
 | `status` | Services and API key health |
 | `tracing` | Open Phoenix traces in browser |
 | `verbose on/off` | Show/hide full model reasoning |
-
-Agents: single, multi, ultrafast, ultrafast-nogpu, custom.
 
 ## Setup
 
@@ -209,7 +207,7 @@ Agents: single, multi, ultrafast, ultrafast-nogpu, custom.
 **Steps:**
 
 ```bash
-git clone <repo-url> nat-agent-lab
+git clone https://github.com/mnajafian-nv/nat-agent-lab.git nat-agent-lab
 cd nat-agent-lab
 bash setup.sh                        # ~20 min; prompts for API keys, downloads model
 bash gaia_tools/start_services.sh    # ~5-10 min (vLLM loads model into GPU memory)
@@ -229,7 +227,7 @@ You should see `Agent: ultrafast | vLLM: OK | NAT: OK | Phoenix: OK | Verbose: O
 **Steps:**
 
 ```bash
-git clone <repo-url> nat-agent-lab
+git clone https://github.com/mnajafian-nv/nat-agent-lab.git nat-agent-lab
 cd nat-agent-lab
 bash setup.sh --cloud                # ~5 min; prompts for API keys, skips model download
 ./ask                                # verify status line shows all OK
