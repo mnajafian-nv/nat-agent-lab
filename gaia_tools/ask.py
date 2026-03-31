@@ -772,35 +772,15 @@ def start_phoenix():
 
 
 COMMANDS_PRIMARY = [
-    ("<any text>",        "Ask anything (multi-turn, remembers context)"),
-    ("level l, n",        "Run dev question n from GAIA level l (1,2,3)"),
-    ("benchmark",         "Run 20-question HF leaderboard (GAIA Level 1)"),
-    ("switch",            "Change agent"),
-    ("tracing",           "View agent traces with Phoenix in your browser"),
-    ("status",            "Services and API key status"),
-    ("help",              "All commands"),
-    ("quit",              "Exit (resume with ./ask)"),
+    ("<any text>",       "Ask anything (multi-turn, remembers context)"),
+    ("level <L>, <N>",   "Run GAIA question N from Level L"),
+    ("benchmark",        "Run 20-question HF leaderboard"),
+    ("switch",           "Change agent"),
+    ("tracing",          "Open Phoenix traces in your browser"),
+    ("status",           "Services and API key health"),
+    ("help",             "All commands"),
+    ("quit",             "Exit (resume with ./ask)"),
 ]
-
-COMMANDS_FULL = [
-    ("", "GAIA Dev Set (practice with answers)"),
-    ("level",           "Show level summary (counts and difficulty)"),
-    ("level 1",         "Browse Level 1 questions"),
-    ("level 1, 3",      "Run question 3 from Level 1"),
-    ("", "GAIA Leaderboard (scored, no answers)"),
-    ("benchmark [agent]", "Run 20-question HF leaderboard, GAIA Level 1 (single, multi, ultrafast, ultrafast-nogpu, custom, or 'all' for 3 local)"),
-    ("", "Conversation"),
-    ("clear",           "Reset conversation memory"),
-    ("verbose on/off",  "Show/hide full model reasoning"),
-    ("", "Agent"),
-    ("switch [name]",   "Change agent (single, multi, ultrafast, ultrafast-nogpu, or custom YAML)"),
-    ("info",            "Current agent, model, and tools"),
-    ("", "System"),
-    ("status",          "Services and API key status"),
-    ("tracing",         "View agent traces with Phoenix in your browser"),
-    ("quit",            "Exit (services keep running, resume with ./ask)"),
-]
-
 
 def _print_commands():
     """Startup: short list with an inviting intro."""
@@ -811,16 +791,24 @@ def _print_commands():
 
 
 def _print_help():
-    """Full grouped command reference."""
+    """Full command reference, grouped by whitespace."""
+    COL = 20
     print()
-    for cmd, desc in COMMANDS_FULL:
-        if not cmd:
-            print(f"  {desc}:")
-        else:
-            print(f"    {cmd:20s}{desc}")
+    print(f"    {'level':{COL}}GAIA validation set summary (all levels)")
+    print(f"    {'level <L>':{COL}}Show Level L questions (1, 2, or 3)")
+    print(f"    {'level <L>, <N>':{COL}}Run question N from Level L (e.g., level 1, 3)")
+    print(f"    {'benchmark [agent]':{COL}}Run 20-question scored leaderboard")
     print()
-    print("  Stop services (from shell):")
-    print("    bash gaia_tools/start_services.sh --stop")
+    print(f"    {'switch [agent]':{COL}}Change agent (clears conversation)")
+    print(f"    {'clear':{COL}}Reset conversation memory")
+    print(f"    {'info':{COL}}Agent, model, and tools")
+    print(f"    {'verbose on/off':{COL}}Show/hide full model reasoning")
+    print()
+    print(f"    {'status':{COL}}Services and API key health")
+    print(f"    {'tracing':{COL}}Open Phoenix traces in browser")
+    print(f"    {'quit':{COL}}Exit (services keep running)")
+    print()
+    print("  Agents: single, multi, ultrafast, ultrafast-nogpu, custom")
     print()
 
 
@@ -916,7 +904,7 @@ def cmd_level(questions, level_str=None):
         if desc:
             header += f": {desc}"
         print(f"\n{header}")
-        print(f"  {len(items)} dev questions (with expected answers):\n")
+        print(f"  {len(items)} validation questions (with expected answers):\n")
         for pos, (flat_idx, q) in enumerate(items, 1):
             full = " ".join(q.get("question", q.get("input", "")).split())
             text = full[:85] + ("..." if len(full) > 85 else "")
@@ -925,13 +913,13 @@ def cmd_level(questions, level_str=None):
         print(f"\n  Run a question: level {level_str}, n  "
               f"(e.g., level {level_str}, 1)")
     else:
-        print(f"\n  GAIA dev set: {len(questions)} questions across "
+        print(f"\n  GAIA validation set: {len(questions)} questions across "
               f"{len(by_level)} difficulty levels:\n")
         print(_level_summary(questions))
-        print("\n  These are practice questions with expected answers.")
+        print("\n  These are validation questions with expected answers.")
         print("  For the scored leaderboard, use: benchmark")
-        print("\n  Browse: level 1, level 2, level 3")
-        print("  Run:    level 1, 3  (Level 1, question 3)")
+        print("\n  Show:  level 1, level 2, level 3")
+        print("  Run:   level 1, 3  (Level 1, question 3)")
 
 
 def _resolve_gaia(questions, level_str, pos):
@@ -1461,7 +1449,7 @@ def main():
             else:
                 print("  Usage:")
                 print("    level         Show level summary")
-                print("    level 1       Browse Level 1 questions")
+                print("    level 1       Show Level 1 questions")
                 print("    level 1, 3    Run question 3 from Level 1")
 
         elif line_lower in ("tracing", "phoenix"):
