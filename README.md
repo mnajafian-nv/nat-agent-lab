@@ -13,17 +13,18 @@ The four included agents score 85-90% on the leaderboard. They are starting poin
 - Works with a **local LLM via vLLM** (8x H100) or **NVIDIA Build cloud** (no GPU needed)
 - **GAIA validation set** (Levels 1-3) with expected answers for testing and iteration
 
-## Before Class
-
-Complete [Setup](#setup) **before class starts**. Setup takes 20-30 minutes (model download, dependencies, API keys) and cannot be done during a 40-minute session.
-
-Once setup is done, verify everything works:
+## Quick Start
 
 ```bash
-./ask
+git clone <repo-url> nat-agent-lab
+cd nat-agent-lab
+bash setup.sh          # ~20 min; prompts for API keys, downloads model
+./ask                  # start chatting
 ```
 
-You should see a status line like `Agent: ultrafast | vLLM: OK | NAT: OK | Phoenix: OK`. If any service shows a problem, type `status` for diagnostics. Ask a test question ("What is 2+2?") to confirm the agent responds. Then you are ready for class.
+Complete this **before class**. Setup takes 20-30 minutes (model download, dependencies, API keys) and cannot be done during a 40-minute session. See [Setup](#setup) for Path A (GPU) vs. Path B (cloud-only) details.
+
+You should see a status line like `Agent: ultrafast | vLLM: OK | NAT: OK | Phoenix: OK`. If any service shows a problem, type `status` for diagnostics. Ask a test question ("What is 2+2?") to confirm the agent responds. You are ready for class.
 
 ## What to Try
 
@@ -83,12 +84,12 @@ After each run, switch to your Phoenix tab and refresh. You will see a new trace
 
 What to look for in each comparison:
 
-| Agent | What it teaches |
-|-------|----------------|
-| **Ultrafast** *(default)* | Prompt-driven routing: the system prompt contains a TYPE A/B/C/D decision tree that classifies the question before any tool call. This is your baseline for the comparison. |
-| **Single** | Flat tool access, no routing. Same tools as Ultrafast, but no classification step. Compare its trace to Ultrafast's: does it call tools the routing logic would have skipped? |
-| **Multi** | Orchestrator overhead: an extra LLM call routes to a specialist sub-agent with a focused prompt and tool subset. Is the routing accurate? Does the specialist's focused context improve tool selection enough to justify the extra LLM call and latency? |
-| **Ultrafast-nogpu** | Cloud inference tradeoff: same prompt as Ultrafast, but the LLM runs on NVIDIA Build instead of local vLLM. Compare latency (network round-trips vs. local GPU), token limits (4096 vs. 16384), and answer quality across different model weights. *(Optional, requires NGC_API_KEY.)* |
+| Agent | What to compare in the traces |
+|-------|-------------------------------|
+| **Ultrafast** *(default)* | Your baseline. Look at how the system prompt classifies the question before any tool call. |
+| **Single** | No routing step. Does it call tools that Ultrafast's routing would have skipped? More or fewer LLM round-trips? |
+| **Multi** | Extra LLM call for orchestrator routing. Is the routing accurate? Is the specialist's focused context worth the added latency? |
+| **Ultrafast-nogpu** | Same prompt as Ultrafast, but cloud LLM. Compare network latency vs. local GPU, and answer quality across different model weights. *(Optional, requires NGC_API_KEY.)* |
 
 **Bonus (if time permits):** run the same 4-agent comparison on a simple factual question like "What is the capital of France?" (zero tools needed, pure LLM knowledge). All 4 agents should answer instantly and correctly. If Multi is noticeably slower, that is the cost of orchestrator overhead on a question that didn't need routing.
 
@@ -156,7 +157,7 @@ All four agents share the same tools: `internet_search`, `wiki_search`, `read_fi
 | **Ultrafast** | `ultrafast-agent/gaia_agent_ultrafast.yml` | `tool_calling_agent`, flat: embedded TYPE A/B/C/D routing decision tree in the system prompt classifies questions before any tool call | MiniMax M2.5 456B MoE (local vLLM) | Same flat architecture as Single, but prompt-driven routing eliminates the orchestrator LLM call. |
 | **Ultrafast-nogpu** | `ultrafast-nogpu-agent/gaia_agent_ultrafast_nogpu.yml` | Same as Ultrafast, but LLM inference runs on NVIDIA Build instead of local vLLM | Qwen 3.5-122B-A10B MoE (NVIDIA Build) | No GPU, no model download, no VRAM. Higher latency, 4096 max output tokens, uses API credits. |
 
-Each agent is defined entirely by its YAML config: agent type, system prompt, tools, and model parameters. NAT supports additional architectures beyond the four above (`react_agent`, `router_agent`, `sequential_executor`, `parallel_executor`, and more). See [NAT examples](https://github.com/NVIDIA/NeMo-Agent-Toolkit/tree/main/examples) for working configs with different architectures and models.
+Each agent is defined entirely by its YAML config: agent type, system prompt, tools, and model parameters. NAT supports additional architectures beyond `tool_calling_agent` (e.g., `react_agent`, `router_agent`, `sequential_executor`). See step 6 for how to experiment with them.
 
 ## Conversation Memory
 
