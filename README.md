@@ -1,13 +1,17 @@
 # NAT Agent Lab
 
-Hands-on lab for building, exploring, and benchmarking AI agents with [NVIDIA NeMo Agent Toolkit (NAT)](https://docs.nvidia.com/nemo/agent-toolkit/) on the [GAIA benchmark](https://arxiv.org/abs/2311.12983).
+Build AI agents, benchmark them on [GAIA](https://arxiv.org/abs/2311.12983), and get your team on the [public leaderboard](https://huggingface.co/spaces/agents-course/Students_Leaderboard). Powered by [NVIDIA NeMo Agent Toolkit (NAT)](https://docs.nvidia.com/nemo/agent-toolkit/).
 
-- **Four agent architectures** with different engineering tradeoffs (same tools, same benchmark)
-- **Interactive chat** (`./ask`) with multi-turn memory, live tool tracing, and agent switching
-- **GAIA validation set** (Levels 1-3) with expected answers for practice and iteration
-- **GAIA benchmark** with automated [HuggingFace leaderboard](https://huggingface.co/spaces/agents-course/Students_Leaderboard) submission (20 scored questions)
-- **OpenTelemetry tracing** via Phoenix to visualize every tool call and LLM step
+By the end of this lab you will know how to:
+- **Diagnose agent behavior** through OpenTelemetry traces: see every tool call, LLM prompt, and routing decision
+- **Compare architectures** (flat, multi-agent, prompt-routed) and understand why they score differently on the same benchmark
+- **Engineer better agents** by tuning system prompts, tool selection, and agent type in a single YAML config
+- **Measure what matters**: submit to a public leaderboard, iterate on your config, and track improvement
+
+The four included agents are starting points, not finished products. Study their configs, read their traces, find where they fail, and build something better.
+
 - Works with a **local LLM via vLLM** (8x H100) or **NVIDIA Build cloud** (no GPU needed)
+- **GAIA validation set** (Levels 1-3) with expected answers for practice and iteration
 
 ## Get Running
 
@@ -61,27 +65,29 @@ Compare: did it use the same tools? Did it get the same answer? How many LLM cal
 ask [2]> tracing
 ```
 
-This opens Phoenix in your browser. You can see every LLM call, tool invocation, and agent step visualized as a trace. Compare traces across agents to understand the architectural differences.
+This opens Phoenix in your browser. Every LLM call, tool invocation, and agent decision is visualized as a trace. You can see exactly why one agent made 3 tool calls while another made 7 for the same question. If you are on a remote machine (Brev, GCP), you need to forward port 6006 first; see [Phoenix Tracing](docs/GUIDE.md#phoenix-tracing).
 
-**5. Run the benchmark**
+**5. Run the benchmark and get on the leaderboard**
 
 ```
 ask [1]> benchmark
 ```
 
-This runs 20 scored questions from the HF leaderboard and submits your answers automatically. Your score appears on the [public leaderboard](https://huggingface.co/spaces/agents-course/Students_Leaderboard) within seconds.
+This runs 20 scored questions, submits your answers, and your team name appears on the [public leaderboard](https://huggingface.co/spaces/agents-course/Students_Leaderboard) within seconds. It will ask for your org and team name (e.g., `UCB` / `AgentSmiths`), and your entry shows up as `NAT-UCB-AgentSmiths-UltrafastAgent`. Run it with different agents to compare scores.
 
-**6. Build your own agent**
+**6. Build your own agent and compete**
+
+The four included agents are baselines. Open their YAML configs, read the system prompts, and look at the traces to see where they fail. Then improve on them:
 
 ```bash
 mkdir my-agent
-cp single-agent/gaia_agent.yml my-agent/gaia_agent.yml
-# Edit the YAML: change the system prompt, tools, agent type, or model
+cp ultrafast-agent/gaia_agent_ultrafast.yml my-agent/config.yml
+# Edit: refine the system prompt, add/remove tools, change the agent type or model
 ./ask
-# Then: switch my-agent/gaia_agent.yml
+# Then: switch my-agent/config.yml
 ```
 
-Run `benchmark custom` to score your custom agent on the leaderboard.
+Test with `level` questions, check traces to see if your changes helped, then run `benchmark custom` to submit your agent's score to the leaderboard. Iterate until you beat the built-ins.
 
 ## Agent Architectures
 
