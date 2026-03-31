@@ -1,17 +1,21 @@
 # NAT Agent Lab
 
-Build AI agents, benchmark them on [GAIA](https://arxiv.org/abs/2311.12983), and get your team on the [public leaderboard](https://huggingface.co/spaces/agents-course/Students_Leaderboard). Powered by [NVIDIA NeMo Agent Toolkit (NAT)](https://docs.nvidia.com/nemo/agent-toolkit/).
+LLM agents can search the web, execute code, read files, and reason across multiple steps, but getting them to do this reliably is an open engineering problem. This lab teaches **eval-driven agent development**: build an agent, benchmark it on real questions, inspect traces to find where it fails, improve the config, and measure again.
 
-By the end of this lab you will know how to:
-- **Diagnose agent behavior** through OpenTelemetry traces: see every tool call, LLM prompt, and routing decision
-- **Compare agent topologies** on the same benchmark: all agents use `tool_calling_agent` (function calling) but differ in routing. Single is flat (all tools, no routing), Multi adds an orchestrator that delegates to specialist sub-agents, Ultrafast embeds routing in the system prompt, and Ultrafast-nogpu swaps the local LLM for a cloud endpoint to show the latency/cost tradeoff
+You will work with three components:
+
+- **[NAT](https://github.com/NVIDIA/NeMo-Agent-Toolkit)** (NeMo Agent Toolkit): NVIDIA's open-source library for connecting and optimizing teams of AI agents. You define an agent entirely in YAML (agent type, system prompt, tools, model) and NAT handles orchestration, tool execution, and LLM calls.
+- **[GAIA](https://arxiv.org/abs/2311.12983)**: a benchmark of real-world questions that require multi-step reasoning and tool use. Answers are exact-match scored, so agent output formatting matters. The repo includes the GAIA validation set (Levels 1-3) with expected answers for testing and iteration.
+- **[Phoenix](https://docs.arize.com/phoenix)**: an OpenTelemetry-based tracing UI. Every LLM call, tool invocation, and routing decision is captured as a span tree you can inspect after each run.
+
+**By the end of this lab you will know how to:**
+
+- **Diagnose agent behavior** through traces: see every tool call, LLM prompt, and routing decision in Phoenix
+- **Compare four agent topologies** on the same benchmark and understand why different routing strategies produce different scores (see [Agent Architectures](#agent-architectures))
 - **Engineer better agents** by tuning system prompts, tool selection, and agent type in a single YAML config
-- **Measure what matters**: submit to a public leaderboard, iterate on your config, and track improvement
+- **Measure what matters**: submit to a [public leaderboard](https://huggingface.co/spaces/agents-course/Students_Leaderboard), iterate on your config, and track improvement
 
-The four included agents score 85-90% on the leaderboard. They are starting points, not finished products. Study their configs, read their traces, find where they fail, and build something better.
-
-- Works with a **local LLM via vLLM** (8x H100) or **NVIDIA Build cloud** (no GPU needed)
-- **GAIA validation set** (Levels 1-3) with expected answers for testing and iteration
+The repo includes four agents that score 85-90% on the leaderboard. They are starting points, not finished products. Study their configs, read their traces, find where they fail, and build something better.
 
 ## Quick Start
 
@@ -159,6 +163,8 @@ All four agents share the same tools: `internet_search`, `wiki_search`, `read_fi
 
 Each agent is defined entirely by its YAML config: agent type, system prompt, tools, and model parameters. NAT supports additional architectures beyond `tool_calling_agent` (e.g., `react_agent`, `router_agent`, `sequential_executor`). See step 6 for how to experiment with them.
 
+**Ultrafast-nogpu notes:** max output tokens are 4096 (vs 16384 local), so cloud responses may truncate on complex multi-step questions. `temperature: 0.0` is set, but `seed` is not supported by NVIDIA Build, and tool results (web, Wikipedia) change over time, so answers can vary between runs.
+
 ## Conversation Memory
 
 `./ask` is **multi-turn**: the agent remembers your conversation and can answer follow-ups. The prompt shows the turn count (e.g., `ask [3]>`). Memory is kept for up to 20 turns, then the oldest turns are trimmed automatically.
@@ -268,13 +274,6 @@ bash gaia_tools/gaia_run.sh --ultrafast       # ultrafast agent
 bash gaia_tools/gaia_run.sh -c my-agent/config.yml  # custom agent
 ```
 
-## Cloud Agent Notes
-
-The ultrafast-nogpu agent uses Qwen 3.5-122B-A10B on NVIDIA Build. Two things to know:
-
-- **Max output tokens:** 4096 (vs 16384 local). Cloud responses may truncate on complex multi-step questions.
-- **Reproducibility:** `temperature: 0.0` is set, but `seed` is not supported by NVIDIA Build. Answers can also vary between runs because tool results (web, Wikipedia) change over time.
-
 ## Troubleshooting
 
 **vLLM won't start or crashes**
@@ -342,15 +341,17 @@ The ultrafast-nogpu agent uses Qwen 3.5-122B-A10B on NVIDIA Build. Two things to
         └── register.py               # Custom tool registration for NAT
 ```
 
-## Going Further
+## References
 
 - [GAIA paper](https://arxiv.org/abs/2311.12983) (Mialon et al., 2023)
-- [HF course leaderboard](https://huggingface.co/spaces/agents-course/Students_Leaderboard) (20 scored questions)
-- [Official GAIA leaderboard](https://huggingface.co/spaces/gaia-benchmark/leaderboard) (300-question research benchmark)
-- [GAIA dataset](https://huggingface.co/datasets/gaia-benchmark/GAIA) (submission instructions, terms of use)
+- [Student leaderboard](https://huggingface.co/spaces/agents-course/Students_Leaderboard): 20 Level-1 questions, scored
+- [Official GAIA leaderboard](https://huggingface.co/spaces/gaia-benchmark/leaderboard): 300-question test set, answers hidden
+- [GAIA dataset](https://huggingface.co/datasets/gaia-benchmark/GAIA): submission instructions, terms of use
 - [NAT documentation](https://docs.nvidia.com/nemo/agent-toolkit/)
-- [NAT GitHub](https://github.com/NVIDIA/NeMo-Agent-Toolkit)
+- [NAT source code and examples](https://github.com/NVIDIA/NeMo-Agent-Toolkit)
 
-To compete on the official GAIA leaderboard (300 questions, no answers revealed), follow the submission instructions at the [GAIA dataset page](https://huggingface.co/datasets/gaia-benchmark/GAIA). Your agent works as-is; no code changes needed. The full test set takes 15-25 hours of GPU time per run.
+To compete on the official GAIA leaderboard, follow the submission instructions on the GAIA dataset page. Your agent works as-is; no code changes needed. The full 300-question test set takes 15-25 hours of GPU time per run.
+
+---
 
 **Tested with:** NAT 1.5.0, vLLM 0.18.0, Python 3.12, MiniMax M2.5 (local), Qwen 3.5-122B-A10B (cloud), on 8x H100 (Brev/GCP).
