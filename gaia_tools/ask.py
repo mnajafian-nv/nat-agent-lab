@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Interactive REPL for exploring NAT agents on GAIA questions.
+"""Interactive chat interface for exploring NAT agents on GAIA questions.
 
 Usage:
     ./ask
@@ -121,7 +121,7 @@ def _normalize_env():
             pass
 
     # Force-sync API keys from .env into os.environ so that keys updated
-    # via the REPL or edited manually are always picked up.
+    # via ./ask or edited manually are always picked up.
     api_key_names = {"TAVILY_API_KEY", "NGC_API_KEY", "HF_TOKEN"}
     for k, v in seen.items():
         if v and (k in api_key_names or not os.environ.get(k)):

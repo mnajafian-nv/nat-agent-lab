@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Single entry point: ./ask
-# Activates the environment and launches the interactive REPL.
+# Activates the environment and launches the interactive chat.
 
 SCRIPT="$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null || echo "$0")"
 DIR="$(cd "$(dirname "$SCRIPT")" && pwd)"

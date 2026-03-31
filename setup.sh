@@ -338,10 +338,10 @@ echo ""
 echo "  Next steps (run from this directory):"
 echo ""
 if $CLOUD_MODE; then
-    echo "    1. ./ask                                 # launch the REPL (auto-selects ultrafast-nogpu)"
+    echo "    1. ./ask                                 # start chatting (auto-selects ultrafast-nogpu)"
 else
     echo "    1. bash gaia_tools/start_services.sh    # start vLLM + Phoenix"
-    echo "    2. ./ask                                 # launch the interactive REPL"
+    echo "    2. ./ask                                 # start chatting with your agent"
 fi
 echo ""
 echo "============================================================"

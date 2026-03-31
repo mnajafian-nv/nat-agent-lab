@@ -3,7 +3,7 @@
 Hands-on lab for building, exploring, and benchmarking AI agents with [NVIDIA NeMo Agent Toolkit (NAT)](https://docs.nvidia.com/nemo/agent-toolkit/) on the [GAIA benchmark](https://arxiv.org/abs/2311.12983).
 
 - **Four agent architectures** with different engineering tradeoffs (same tools, same benchmark)
-- **Interactive REPL** with multi-turn memory, live tool tracing, and agent switching
+- **Interactive chat** (`./ask`) with multi-turn memory, live tool tracing, and agent switching
 - **GAIA validation set** (Levels 1-3) with expected answers for practice and iteration
 - **GAIA benchmark** with automated [HuggingFace leaderboard](https://huggingface.co/spaces/agents-course/Students_Leaderboard) submission (20 scored questions)
 - **OpenTelemetry tracing** via Phoenix to visualize every tool call and LLM step
@@ -11,7 +11,7 @@ Hands-on lab for building, exploring, and benchmarking AI agents with [NVIDIA Ne
 
 ## Get Running
 
-If setup is already done, just launch the REPL:
+If setup is already done, just start chatting:
 
 ```bash
 ./ask
@@ -96,7 +96,7 @@ All four agents share the same tools: `internet_search`, `wiki_search`, `read_fi
 
 ## Conversation Memory
 
-The REPL is **multi-turn**: the agent remembers your conversation and can answer follow-ups. The prompt shows the turn count (e.g., `ask [3]>`). Memory is kept for up to 20 turns, then the oldest turns are trimmed automatically.
+`./ask` is **multi-turn**: the agent remembers your conversation and can answer follow-ups. The prompt shows the turn count (e.g., `ask [3]>`). Memory is kept for up to 20 turns, then the oldest turns are trimmed automatically.
 
 Three things clear memory:
 
@@ -108,7 +108,7 @@ If a question fails (timeout, API error), the failed message is removed from mem
 
 ## Commands
 
-Type `help` in the REPL for the full list. Key commands:
+Type `help` in `./ask` for the full list. Key commands:
 
 | Command | What it does |
 |---------|-------------|
@@ -174,18 +174,18 @@ Three keys are needed for both paths (free tiers are sufficient). `setup.sh` pro
 | **NVIDIA Build** | [build.nvidia.com](https://build.nvidia.com/) | Vision/audio tools (both paths); main LLM (Path B) |
 | **HuggingFace** | [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) | GAIA dataset download and leaderboard submission |
 
-**Coming back later?** Just run `./ask`. vLLM and Phoenix run in background tmux sessions that survive SSH disconnects. Each REPL session starts fresh with the default agent (ultrafast if vLLM is running, ultrafast-nogpu otherwise).
+**Coming back later?** Just run `./ask`. vLLM and Phoenix run in background tmux sessions that survive SSH disconnects. Each session starts fresh with the default agent (ultrafast if vLLM is running, ultrafast-nogpu otherwise).
 
 ## Something Not Working?
 
-Type `status` in the REPL for a full diagnostic (services, API keys, vLLM health). For common issues like vLLM crashes, 422 errors, disk space, or port forwarding, see [Troubleshooting](docs/GUIDE.md#troubleshooting).
+Type `status` in `./ask` for a full diagnostic (services, API keys, vLLM health). For common issues like vLLM crashes, 422 errors, disk space, or port forwarding, see [Troubleshooting](docs/GUIDE.md#troubleshooting).
 
 ## File Structure
 
 ```
 .
 ├── setup.sh                          # One-time environment setup (--cloud for no-GPU path)
-├── ask                               # Launch script (activates env, runs REPL)
+├── ask                               # Launch script (activates env, starts chat)
 ├── README.md                         # This file
 ├── docs/GUIDE.md                     # Reference guide (benchmarks, models, tracing, troubleshooting)
 ├── LICENSE                           # Apache 2.0 (matches upstream NAT)
@@ -201,7 +201,7 @@ Type `status` in the REPL for a full diagnostic (services, API keys, vLLM health
 ├── ultrafast-nogpu-agent/
 │   └── gaia_agent_ultrafast_nogpu.yml # ultrafast-nogpu (NVIDIA Build, no local GPU)
 └── gaia_tools/
-    ├── ask.py                        # Interactive REPL (called by ./ask)
+    ├── ask.py                        # Interactive chat engine (called by ./ask)
     ├── gaia_run.sh                   # One-command benchmark runner (any agent)
     ├── gaia_run_all.sh               # Run all 3 local agents sequentially
     ├── start_services.sh             # Start vLLM + Phoenix in tmux

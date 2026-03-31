@@ -267,7 +267,7 @@ fi
 print_status
 log "Ready! Start exploring:"
 echo ""
-echo "  ./ask                                    # interactive REPL (recommended)"
+echo "  ./ask                                    # interactive chat (recommended)"
 echo ""
 echo "  Or run benchmarks directly:"
 echo "  bash gaia_tools/gaia_run.sh --single    # single-agent"

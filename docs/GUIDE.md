@@ -16,7 +16,7 @@ There are two separate question sets:
 | **2** | 86 | Medium | Multi-step reasoning, file handling, cross-referencing sources |
 | **3** | 26 | Hard | Deep multi-tool chains, long reasoning, complex file analysis |
 
-Use `level 1`, `level 2`, or `level 3` in the REPL to list validation questions, then `level 1, 3` to run the 3rd question from Level 1. After each run the expected answer is shown so you can iterate.
+Use `level 1`, `level 2`, or `level 3` in `./ask` to list validation questions, then `level 1, 3` to run the 3rd question from Level 1. After each run the expected answer is shown so you can iterate.
 
 **Leaderboard set** (20 scored questions, no answers revealed):
 
@@ -254,15 +254,15 @@ The `workflow:` and `functions:` sections stay the same regardless of which mode
 - Re-run `python3 gaia_tools/prep_gaia_data.py` to re-download them
 
 **422 "Unprocessable Entity" errors (ultrafast-nogpu)**
-- The REPL auto-recovers: on a 422, it waits 30 s, restarts NAT, and retries the question once. If the retry also fails, check the items below.
+- `./ask` auto-recovers: on a 422, it waits 30 s, restarts NAT, and retries the question once. If the retry also fails, check the items below.
 - NVIDIA Build credits may be exhausted. Check your balance at: https://build.nvidia.com/settings/api-keys
 - Request more credits with a business or institutional email (Profile > Request More)
 - Wait a few minutes if you hit a burst rate limit
-- Run `status` in the REPL for a full API key diagnostic
+- Run `status` in `./ask` for a full API key diagnostic
 
 **macOS / Cloud-Only Setup**
 - Use `bash setup.sh --cloud` to skip GPU checks, vLLM, and model downloads entirely
-- The REPL auto-detects that vLLM is unavailable and starts with the `ultrafast-nogpu` agent
+- `./ask` auto-detects that vLLM is unavailable and starts with the `ultrafast-nogpu` agent
 - If `prep_gaia_data.py` fails with a permission error on the HuggingFace cache, re-run `bash setup.sh --cloud` (it now auto-sets a local `HF_HOME`)
 - Port forwarding for Phoenix: `ssh -L 6006:localhost:6006 <your-server>` (or use VS Code remote)
 
