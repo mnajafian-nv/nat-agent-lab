@@ -263,11 +263,12 @@ async def python_executor(config: PythonExecutorToolConfig, builder: Builder):
             The stdout output from executing the code, or an error message.
         """
         def _exec():
+            tmp_path = None
             with tempfile.NamedTemporaryFile(
                 mode="w", suffix=".py", delete=False, encoding="utf-8"
             ) as tmp:
-                tmp.write(code)
                 tmp_path = tmp.name
+                tmp.write(code)
             try:
                 result = subprocess.run(
                     ["python3", tmp_path],
@@ -288,7 +289,11 @@ async def python_executor(config: PythonExecutorToolConfig, builder: Builder):
             except Exception as e:
                 return f"Error executing code: {type(e).__name__}: {e}"
             finally:
-                os.unlink(tmp_path)
+                if tmp_path is not None:
+                    try:
+                        os.unlink(tmp_path)
+                    except OSError:
+                        pass
 
         return await asyncio.to_thread(_exec)
 
