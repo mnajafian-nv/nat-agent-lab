@@ -67,28 +67,39 @@ def ask_nat(question: str, timeout: int = 300) -> str:
         return f"FAILED: {e}"
 
 
+_ANSWER_PATTERNS = [
+    re.compile(
+        r"(?:Thus |So |Therefore |The )?(?:final )?(?:answer|result)"
+        r"(?:\s+(?:is|was|should be|would be))?[:\s]+[\"']?([^\n\"']{1,200})[\"']?\s*$",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(?:Thus |So )?(?:we should )?(?:output|respond with)"
+        r"[:\s]+[\"']?([^\n\"']{1,200})[\"']?\s*$",
+        re.IGNORECASE,
+    ),
+    re.compile(r"^([^\n]{1,100})$"),
+]
+_SENT_BREAK_RE = re.compile(r"\.\s+[A-Z]")
+
+
 def _extract_answer_from_think(inside: str) -> str | None:
     """Try to extract a clear answer from inside a <think> block.
 
     Handles models that state "answer: X" or "Thus answer: X" repeatedly
     inside their reasoning before the block closes or gets truncated.
     """
-    answer_patterns = [
-        r"(?:Thus |So |Therefore |The )?(?:final )?(?:answer|result)(?:\s+(?:is|was|should be|would be))?[:\s]+[\"']?([^\n\"']{1,200})[\"']?\s*$",
-        r"(?:Thus |So )?(?:we should )?(?:output|respond with)[:\s]+[\"']?([^\n\"']{1,200})[\"']?\s*$",
-        r"^([^\n]{1,100})$",
-    ]
     lines = [ln.strip() for ln in inside.split("\n") if ln.strip()]
     if not lines:
         return None
 
     for line in reversed(lines):
-        for pat in answer_patterns[:2]:
-            m = re.search(pat, line, re.IGNORECASE)
+        for pat in _ANSWER_PATTERNS[:2]:
+            m = pat.search(line)
             if m:
                 candidate = m.group(1).strip()
                 # Truncate at sentence boundary: "Claus. However..." -> "Claus"
-                sent_break = re.search(r"\.\s+[A-Z]", candidate)
+                sent_break = _SENT_BREAK_RE.search(candidate)
                 if sent_break:
                     candidate = candidate[:sent_break.start()]
                 candidate = candidate.strip().rstrip(".")
