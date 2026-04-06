@@ -273,7 +273,7 @@ def _check_hf(token):
 def check_service(url, timeout=3):
     try:
         r = requests.get(url, timeout=timeout)
-        return r.status_code < 500
+        return r.status_code == 200
     except Exception:
         return False
 
