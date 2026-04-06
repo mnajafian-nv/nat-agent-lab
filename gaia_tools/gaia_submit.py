@@ -467,7 +467,7 @@ def ask_with_retry(question_text: str, timeout: int) -> tuple[str, float, bool]:
         print(f"    [retry reason: {retry_reason}]")
         # Preserve tool hints appended at end (file paths, YouTube IDs)
         hint_start = question_text.find("\n\n[")
-        if hint_start > 0:
+        if hint_start != -1:
             body = question_text[:hint_start][:1500]
             hints = question_text[hint_start:][:500]
             retry_q = body + hints
