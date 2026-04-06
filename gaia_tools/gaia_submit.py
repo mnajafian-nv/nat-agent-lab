@@ -787,15 +787,17 @@ def main():
     failed_results = [r for r in results if r.get("failed")]
     if failed_results:
         print(f"\n  Failed to answer ({len(failed_results)}):")
-        for r in failed_results:
-            print(f"    Q{results.index(r)+1}: {r['question'][:70]}...")
-    slow = sorted(results, key=lambda r: r.get("elapsed_seconds", 0), reverse=True)[:3]
-    if slow and slow[0].get("elapsed_seconds", 0) > 60:
+        for idx, r in enumerate(results, 1):
+            if r.get("failed"):
+                print(f"    Q{idx}: {r['question'][:70]}...")
+    indexed = list(enumerate(results, 1))
+    slow = sorted(indexed, key=lambda t: t[1].get("elapsed_seconds", 0), reverse=True)[:3]
+    if slow and slow[0][1].get("elapsed_seconds", 0) > 60:
         print(f"\n  Slowest questions:")
-        for r in slow:
+        for idx, r in slow:
             if r.get("elapsed_seconds", 0) > 60:
                 retry = " [retry]" if r.get("was_retry") else ""
-                print(f"    Q{results.index(r)+1}: {r['elapsed_seconds']:.0f}s{retry}"
+                print(f"    Q{idx}: {r['elapsed_seconds']:.0f}s{retry}"
                       f" - {r['question'][:60]}...")
 
     summary_path = Path("gaia_summary.json")
