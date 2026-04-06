@@ -516,11 +516,11 @@ def _wait_for_vllm(max_wait: int = 30) -> None:
     for i in range(max_wait):
         try:
             r = requests.get(_VLLM_HEALTH, timeout=3)
-            if r.status_code < 500:
+            if r.status_code == 200:
                 if i > 0:
                     print(f"    [vLLM recovered after {i}s]")
                 return
-        except Exception:
+        except requests.RequestException:
             pass
         time.sleep(1)
     print(f"    [WARNING: vLLM unresponsive after {max_wait}s]")
