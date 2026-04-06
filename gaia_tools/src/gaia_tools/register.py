@@ -264,12 +264,12 @@ async def python_executor(config: PythonExecutorToolConfig, builder: Builder):
         """
         def _exec():
             tmp_path = None
-            with tempfile.NamedTemporaryFile(
-                mode="w", suffix=".py", delete=False, encoding="utf-8"
-            ) as tmp:
-                tmp_path = tmp.name
-                tmp.write(code)
             try:
+                with tempfile.NamedTemporaryFile(
+                    mode="w", suffix=".py", delete=False, encoding="utf-8"
+                ) as tmp:
+                    tmp_path = tmp.name
+                    tmp.write(code)
                 result = subprocess.run(
                     ["python3", tmp_path],
                     capture_output=True,
