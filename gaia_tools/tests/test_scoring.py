@@ -237,3 +237,11 @@ class TestExtractAnswerFromThink:
             "The answer is wrong\nThe answer is right"
         )
         assert result == "right"
+
+    def test_filtered_candidates_fall_back_to_last_line(self):
+        # Candidates starting with filtered words ("but", "however", etc.) are skipped.
+        # When every matched candidate is filtered, return the raw last line.
+        result = _extract_answer_from_think(
+            "The answer is but that is uncertain\nThe answer is however not clear"
+        )
+        assert result == "The answer is however not clear"
