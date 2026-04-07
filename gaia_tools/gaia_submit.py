@@ -67,28 +67,39 @@ def ask_nat(question: str, timeout: int = 300) -> str:
         return f"FAILED: {e}"
 
 
+_ANSWER_PATTERNS = [
+    re.compile(
+        r"(?:Thus |So |Therefore |The )?(?:final )?(?:answer|result)"
+        r"(?:\s+(?:is|was|should be|would be))?[:\s]+[\"']?([^\n\"']{1,200})[\"']?\s*$",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(?:Thus |So )?(?:we should )?(?:output|respond with)"
+        r"[:\s]+[\"']?([^\n\"']{1,200})[\"']?\s*$",
+        re.IGNORECASE,
+    ),
+    re.compile(r"^([^\n]{1,100})$"),
+]
+_SENT_BREAK_RE = re.compile(r"\.\s+[A-Z]")
+
+
 def _extract_answer_from_think(inside: str) -> str | None:
     """Try to extract a clear answer from inside a <think> block.
 
     Handles models that state "answer: X" or "Thus answer: X" repeatedly
     inside their reasoning before the block closes or gets truncated.
     """
-    answer_patterns = [
-        r"(?:Thus |So |Therefore |The )?(?:final )?(?:answer|result)(?:\s+(?:is|was|should be|would be))?[:\s]+[\"']?([^\n\"']{1,200})[\"']?\s*$",
-        r"(?:Thus |So )?(?:we should )?(?:output|respond with)[:\s]+[\"']?([^\n\"']{1,200})[\"']?\s*$",
-        r"^([^\n]{1,100})$",
-    ]
     lines = [ln.strip() for ln in inside.split("\n") if ln.strip()]
     if not lines:
         return None
 
     for line in reversed(lines):
-        for pat in answer_patterns[:2]:
-            m = re.search(pat, line, re.IGNORECASE)
+        for pat in _ANSWER_PATTERNS[:2]:
+            m = pat.search(line)
             if m:
                 candidate = m.group(1).strip()
                 # Truncate at sentence boundary: "Claus. However..." -> "Claus"
-                sent_break = re.search(r"\.\s+[A-Z]", candidate)
+                sent_break = _SENT_BREAK_RE.search(candidate)
                 if sent_break:
                     candidate = candidate[:sent_break.start()]
                 candidate = candidate.strip().rstrip(".")
@@ -456,7 +467,7 @@ def ask_with_retry(question_text: str, timeout: int) -> tuple[str, float, bool]:
         print(f"    [retry reason: {retry_reason}]")
         # Preserve tool hints appended at end (file paths, YouTube IDs)
         hint_start = question_text.find("\n\n[")
-        if hint_start > 0:
+        if hint_start != -1:
             body = question_text[:hint_start][:1500]
             hints = question_text[hint_start:][:500]
             retry_q = body + hints
@@ -505,11 +516,11 @@ def _wait_for_vllm(max_wait: int = 30) -> None:
     for i in range(max_wait):
         try:
             r = requests.get(_VLLM_HEALTH, timeout=3)
-            if r.status_code < 500:
+            if r.status_code == 200:
                 if i > 0:
                     print(f"    [vLLM recovered after {i}s]")
                 return
-        except Exception:
+        except requests.RequestException:
             pass
         time.sleep(1)
     print(f"    [WARNING: vLLM unresponsive after {max_wait}s]")
@@ -776,15 +787,17 @@ def main():
     failed_results = [r for r in results if r.get("failed")]
     if failed_results:
         print(f"\n  Failed to answer ({len(failed_results)}):")
-        for r in failed_results:
-            print(f"    Q{results.index(r)+1}: {r['question'][:70]}...")
-    slow = sorted(results, key=lambda r: r.get("elapsed_seconds", 0), reverse=True)[:3]
-    if slow and slow[0].get("elapsed_seconds", 0) > 60:
+        for idx, r in enumerate(results, 1):
+            if r.get("failed"):
+                print(f"    Q{idx}: {r['question'][:70]}...")
+    indexed = list(enumerate(results, 1))
+    slow = sorted(indexed, key=lambda t: t[1].get("elapsed_seconds", 0), reverse=True)[:3]
+    if slow and slow[0][1].get("elapsed_seconds", 0) > 60:
         print(f"\n  Slowest questions:")
-        for r in slow:
+        for idx, r in slow:
             if r.get("elapsed_seconds", 0) > 60:
                 retry = " [retry]" if r.get("was_retry") else ""
-                print(f"    Q{results.index(r)+1}: {r['elapsed_seconds']:.0f}s{retry}"
+                print(f"    Q{idx}: {r['elapsed_seconds']:.0f}s{retry}"
                       f" - {r['question'][:60]}...")
 
     summary_path = Path("gaia_summary.json")

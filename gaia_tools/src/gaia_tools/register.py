@@ -263,12 +263,13 @@ async def python_executor(config: PythonExecutorToolConfig, builder: Builder):
             The stdout output from executing the code, or an error message.
         """
         def _exec():
-            with tempfile.NamedTemporaryFile(
-                mode="w", suffix=".py", delete=False, encoding="utf-8"
-            ) as tmp:
-                tmp.write(code)
-                tmp_path = tmp.name
+            tmp_path = None
             try:
+                with tempfile.NamedTemporaryFile(
+                    mode="w", suffix=".py", delete=False, encoding="utf-8"
+                ) as tmp:
+                    tmp_path = tmp.name
+                    tmp.write(code)
                 result = subprocess.run(
                     ["python3", tmp_path],
                     capture_output=True,
@@ -288,7 +289,11 @@ async def python_executor(config: PythonExecutorToolConfig, builder: Builder):
             except Exception as e:
                 return f"Error executing code: {type(e).__name__}: {e}"
             finally:
-                os.unlink(tmp_path)
+                if tmp_path is not None:
+                    try:
+                        os.unlink(tmp_path)
+                    except OSError:
+                        pass
 
         return await asyncio.to_thread(_exec)
 
@@ -414,14 +419,16 @@ def _convert_to_wav(file_path: str) -> str:
     """Convert audio to 16-bit mono WAV using ffmpeg. Returns path to WAV file."""
     wav_path = file_path.rsplit(".", 1)[0] + "_converted.wav"
     try:
-        subprocess.run(
+        result = subprocess.run(
             ["ffmpeg", "-y", "-i", file_path, "-ar", "16000", "-ac", "1",
              "-sample_fmt", "s16", wav_path],
             capture_output=True, text=True, timeout=30,
         )
-        if Path(wav_path).exists():
+        if result.returncode != 0:
+            logger.warning("ffmpeg conversion failed (exit %d): %s", result.returncode, result.stderr.strip())
+        elif Path(wav_path).exists():
             return wav_path
-    except Exception:
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
         pass
     return file_path
 
