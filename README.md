@@ -195,6 +195,7 @@ Type `help` in `./ask` for the full list. Key commands:
 | `status` | Services and API key health |
 | `tracing` | Open Phoenix traces in browser |
 | `verbose on/off` | Show/hide full model reasoning |
+| `quit` | Exit the `./ask` program (note: Ctrl+C does **not** work) |
 
 ## Setup
 
@@ -240,13 +241,29 @@ You should see `Agent: ultrafast-nogpu | vLLM: off (not needed) | NAT: OK | Phoe
 
 ### API Keys
 
-Three keys are needed for both paths (free tiers are sufficient). `setup.sh` prompts for them interactively and saves to `.env`.
+Three keys are needed for both paths (free tiers are sufficient). `setup.sh` prompts for them interactively and saves to `.env`. **Sign up for all three accounts before running `setup.sh`** so you have the keys ready when prompted.
 
 | Key | Sign up | Used for |
 |-----|---------|----------|
 | **Tavily** | [tavily.com](https://tavily.com/) | Internet search tool |
 | **NVIDIA Build** | [build.nvidia.com](https://build.nvidia.com/) | Vision/audio tools (both paths); main LLM (Path B) |
 | **HuggingFace** | [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) | GAIA dataset download and leaderboard submission |
+
+**Tavily (TAVILY_API_KEY):**
+1. Go to [tavily.com](https://tavily.com/) and create a free account.
+2. After signing in, your API key is shown on the dashboard. Copy it.
+
+**NVIDIA Build (NGC_API_KEY):**
+1. Go to [build.nvidia.com](https://build.nvidia.com/) and click **Login** in the top right.
+2. Enter the email you want to use, then click **Login Help**.
+3. Click **"I don't have an NVIDIA account"** and follow the prompts to create one. You will need to enter a verification code sent to your email **and** verify via phone number.
+4. Once logged in, click your **profile icon** (top right) and select **API Keys**.
+5. Click **Generate API Key**, give it any name, and copy the key.
+
+**HuggingFace (HF_TOKEN):**
+1. Go to [huggingface.co](https://huggingface.co/) and create a free account if you don't have one.
+2. Once signed in, go to [Settings > Access Tokens](https://huggingface.co/settings/tokens).
+3. Create a new token with **Read** access. Copy the token.
 
 **Coming back later?** Just run `./ask`. vLLM and Phoenix run in background tmux sessions that survive SSH disconnects. Each session starts fresh with the default agent (ultrafast if vLLM is running, ultrafast-nogpu otherwise).
 

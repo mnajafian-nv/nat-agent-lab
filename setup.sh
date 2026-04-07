@@ -125,10 +125,10 @@ if python3 -c "import nat; import datasets; import openpyxl; import bs4; import 
     ok "NAT and dependencies already installed"
 else
     log "Installing NAT and dependencies..."
-    uv pip install "nvidia-nat[langchain,phoenix]==1.5.0" arize-phoenix requests pyyaml datasets \
-        openpyxl beautifulsoup4 pypdf python-pptx sympy 2>/dev/null \
-        || pip install "nvidia-nat[langchain,phoenix]==1.5.0" arize-phoenix requests pyyaml datasets \
-        openpyxl beautifulsoup4 pypdf python-pptx sympy
+    uv pip install "nvidia-nat[langchain,phoenix]==1.5.0" "arize-phoenix==13.21.0" "arize-phoenix-evals<3" requests pyyaml datasets \
+        openpyxl beautifulsoup4 pypdf python-pptx sympy dask distributed 2>/dev/null \
+        || pip install "nvidia-nat[langchain,phoenix]==1.5.0" "arize-phoenix==13.21.0" "arize-phoenix-evals<3" requests pyyaml datasets \
+        openpyxl beautifulsoup4 pypdf python-pptx sympy dask distributed
     ok "NAT installed"
 fi
 
