@@ -3,12 +3,16 @@ import sys
 import os
 from unittest.mock import MagicMock
 
-# gaia_submit.py imports requests and huggingface_hub at module level.
-# Stub them before any test file imports gaia_submit so the module loads
-# without requiring those packages to be installed.
+# gaia_submit.py and ask.py import these at module level.
+# Stub them before any test file imports so modules load without
+# requiring these packages to be installed.
 for _mod in ("requests", "huggingface_hub"):
     sys.modules.setdefault(_mod, MagicMock())
 
-# Make gaia_tools/ importable as a plain directory (gaia_submit is a script,
-# not a package, so we add its parent to sys.path).
+# ask.py imports yaml and readline; yaml is needed for real tests,
+# readline can be stubbed if missing.
+sys.modules.setdefault("readline", MagicMock())
+
+# Make gaia_tools/ importable as a plain directory (gaia_submit and ask
+# are scripts, not packages, so we add their parent to sys.path).
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
