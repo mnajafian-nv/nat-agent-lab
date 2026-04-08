@@ -2,9 +2,8 @@
 # ============================================================================
 # gaia_run_all.sh - Run all 3 LOCAL agent architectures sequentially, submit each to HF
 #
-# This runs single + multi + ultrafast on local vLLM. It does NOT include the
-# ultrafast-nogpu agent or custom configs. Use "benchmark ultrafast-nogpu" or
-# "benchmark custom" for those.
+# This runs single + multi + ultrafast on local vLLM. It does NOT include
+# custom configs. Use "benchmark custom" for those.
 #
 # Usage (in tmux, output shows on screen AND is saved to log):
 #   bash gaia_tools/gaia_run_all.sh

@@ -89,15 +89,19 @@ echo "Phoenix exited. Check $REPO_ROOT/logs/phoenix.log"
 sleep 9999
 PHOENIX_EOF
         chmod +x /tmp/start_phoenix.sh
-        tmux new-session -d -s phoenix "bash /tmp/start_phoenix.sh"
-
-        log "Phoenix starting in tmux session 'phoenix'. Waiting..."
+        if command -v tmux &>/dev/null; then
+            tmux new-session -d -s phoenix "bash /tmp/start_phoenix.sh"
+            log "Phoenix starting in tmux session 'phoenix'. Waiting..."
+        else
+            nohup bash /tmp/start_phoenix.sh > /dev/null 2>&1 & disown
+            log "Phoenix starting in background (pid $!). Waiting..."
+        fi
         WAITED=0
         while ! check_phoenix; do
             sleep 2
             WAITED=$((WAITED + 2))
-            if [ $WAITED -ge 30 ]; then
-                warn "Phoenix not healthy after 30s. Check: tmux attach -t phoenix"
+            if [ $WAITED -ge 60 ]; then
+                warn "Phoenix not healthy after 60s. Check: tmux attach -t phoenix"
                 exit 1
             fi
             printf "."
@@ -243,9 +247,13 @@ sleep 9999
 PHOENIX_EOF
     chmod +x /tmp/start_phoenix.sh
 
-    tmux new-session -d -s phoenix "bash /tmp/start_phoenix.sh"
-
-    log "Phoenix starting in tmux session 'phoenix'. Waiting for health..."
+    if command -v tmux &>/dev/null; then
+        tmux new-session -d -s phoenix "bash /tmp/start_phoenix.sh"
+        log "Phoenix starting in tmux session 'phoenix'. Waiting for health..."
+    else
+        nohup bash /tmp/start_phoenix.sh > /dev/null 2>&1 & disown
+        log "Phoenix starting in background (pid $!). Waiting for health..."
+    fi
     WAITED=0
     while ! check_phoenix; do
         sleep 2

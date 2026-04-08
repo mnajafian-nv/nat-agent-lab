@@ -6,7 +6,6 @@
 #   ./gaia_run.sh --single                         # single-agent, auto-submit
 #   ./gaia_run.sh --multi                           # multi-agent (orchestrator), auto-submit
 #   ./gaia_run.sh --ultrafast                       # ultrafast single-agent w/ routing prompt
-#   ./gaia_run.sh --ultrafast-nogpu                  # ultrafast-nogpu (NVIDIA Build, no local GPU)
 #   ./gaia_run.sh -c path/to/config.yml             # custom config
 #   ./gaia_run.sh --single --tag "after chess fix"  # label the run
 #   ./gaia_run.sh --single -u MyTeam --limit 5      # quick 5-question test
@@ -24,7 +23,6 @@
 #   --single     ->  NAT-<ORG_NAME>-<TEAM_NAME>-SingleAgent
 #   --multi      ->  NAT-<ORG_NAME>-<TEAM_NAME>-MultiAgent
 #   --ultrafast  ->  NAT-<ORG_NAME>-<TEAM_NAME>-Ultrafast
-#   --ultrafast-nogpu -> NAT-<ORG_NAME>-<TEAM_NAME>-Ultrafast-NoGPU
 # ============================================================================
 set -uo pipefail
 
@@ -73,10 +71,6 @@ while [[ $# -gt 0 ]]; do
         --ultrafast)
             CONFIG="ultrafast-agent/gaia_agent_ultrafast.yml"
             AGENT_MODE="Ultrafast"
-            shift ;;
-        --ultrafast-nogpu)
-            CONFIG="ultrafast-nogpu-agent/gaia_agent_ultrafast_nogpu.yml"
-            AGENT_MODE="Ultrafast-NoGPU"
             shift ;;
         -c|--config)    CONFIG="$2"; shift 2 ;;
         -u|--username)  USERNAME="$2"; shift 2 ;;
@@ -144,7 +138,7 @@ if $HISTORY_ONLY; then
     log "Run history:"
     echo ""
     # Show history for all experiment folders that have runs
-    for exp_dir in single-agent multi-agent ultrafast-agent ultrafast-nogpu-agent; do
+    for exp_dir in single-agent multi-agent ultrafast-agent ultrafast-ollama-agent; do
         [[ -d "$exp_dir/runs" ]] || continue
         summaries=$(ls -d "$exp_dir"/runs/run*/ 2>/dev/null | sort -V)
         [[ -z "$summaries" ]] && continue
@@ -187,12 +181,11 @@ fi
 
 # ---- Validate config was specified ----
 if [[ -z "$CONFIG" ]]; then
-    die "No config specified. Use --single, --multi, --ultrafast, --ultrafast-nogpu, or -c <path>.
+    die "No config specified. Use --single, --multi, --ultrafast, or -c <path>.
   Examples:
     bash gaia_tools/gaia_run.sh --single
     bash gaia_tools/gaia_run.sh --multi
     bash gaia_tools/gaia_run.sh --ultrafast
-    bash gaia_tools/gaia_run.sh --ultrafast-nogpu
     bash gaia_tools/gaia_run.sh -c single-agent/gaia_agent.yml"
 fi
 
@@ -332,9 +325,12 @@ d = yaml.safe_load(open('$CONFIG'))
 wf = d.get('workflow', {})
 llm_key = wf.get('llm_name', '')
 llm_cfg = d.get('llms', {}).get(llm_key, {})
+base_url = llm_cfg.get('base_url', 'localhost')
 if llm_cfg.get('_type') == 'nim':
     print('no')
-elif 'localhost' not in llm_cfg.get('base_url', 'localhost') and '127.0.0.1' not in llm_cfg.get('base_url', 'localhost'):
+elif 'localhost' not in base_url and '127.0.0.1' not in base_url:
+    print('no')
+elif '11434' in base_url:
     print('no')
 else:
     print('yes')
@@ -344,7 +340,7 @@ export USES_LOCAL_LLM
 
 if [[ "$USES_LOCAL_LLM" == "no" ]]; then
     log "Step 2/5: Skipping vLLM check (non-local model detected)"
-    ok "Using NVIDIA Build, no local vLLM needed"
+    ok "Using remote/non-local model, no local vLLM needed"
 else
     log "Step 2/5: Checking vLLM on port $VLLM_PORT..."
     if check_vllm; then
