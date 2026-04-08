@@ -383,12 +383,14 @@ def _looks_like_garbage(answer: str) -> bool:
     Conservative: only flags answers that clearly look like reasoning,
     not legitimate answers that happen to be long (e.g. comma-separated lists).
     """
-    if len(answer) > 300:
-        return True
     lower = answer.lower()
     if any(lower.startswith(phrase) for phrase in _GARBAGE_STARTS):
         return True
     if any(phrase in lower for phrase in _REASONING_PHRASES):
+        return True
+    # Long answers are suspicious, but comma-separated lists are legitimate GAIA answers.
+    # Only flag long answers that look like prose (few commas relative to length).
+    if len(answer) > 500 and answer.count(",") < len(answer) // 100:
         return True
     if len(answer) > 150 and any(w in lower for w in ("however", "therefore", "because")):
         return True
@@ -398,10 +400,8 @@ def _looks_like_garbage(answer: str) -> bool:
 def _wait_for_rate_limit(attempt: int) -> float:
     """Exponential backoff for rate limits.
 
-    NVIDIA Build free tier: ~40 RPM, 1,000-5,000 total credits.
-    First retry at 5s covers a temporary burst. Second at 30s covers a full
-    cooldown window. Third at 60s is a final attempt; if this also 429s,
-    credits are likely exhausted (no amount of waiting helps).
+    First retry at 5s covers a temporary burst. Second at 30s covers a
+    full cooldown window. Third at 60s is a final attempt.
     """
     delays = [5, 30, 60]
     wait = delays[min(attempt, len(delays) - 1)]
@@ -426,10 +426,8 @@ def ask_with_retry(question_text: str, timeout: int) -> tuple[str, float, bool]:
         if answer == "FAILED_RATE_LIMIT":
             elapsed = time.time() - start
             return (
-                "FAILED: NVIDIA Build returned 429 after 3 retries (~95s of waiting). "
-                "This usually means your NVIDIA Build credits are exhausted. "
-                "Check your balance at https://build.nvidia.com/settings/api-keys "
-                "or switch to a local agent."
+                "FAILED: LLM endpoint returned 429 after 3 retries (~95s of waiting). "
+                "Rate limit exceeded. Wait 60s and retry."
             ), elapsed, True
 
     # NAT structural failure (hit max_iterations): retry with a fresh, directive

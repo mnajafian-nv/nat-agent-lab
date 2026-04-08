@@ -25,5 +25,8 @@ dependencies = [
     "youtube-transcript-api",
 ]
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
 [project.entry-points.'nat.components']
 gaia_tools = "gaia_tools.register"

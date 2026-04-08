@@ -5,19 +5,14 @@
 # Installs all dependencies, downloads the model, and verifies the environment.
 # Safe to re-run (all steps are idempotent).
 #
-# Prerequisites (local LLM):
-#   - Linux with 8x H100 GPUs (or equivalent)
-#   - 300 GB free disk space in the cloned directory
-#   - NVIDIA driver installed (nvidia-smi works)
-#
-# Prerequisites (cloud LLM - use --cloud flag):
-#   - Any Linux machine (no GPU required for the LLM)
-#   - NGC_API_KEY with access to build.nvidia.com
+# Path A (GPU):    Linux with 8x H100 GPUs — vLLM + MiniMax M2.5
+#                  Requires: 300 GB free disk, NVIDIA driver (nvidia-smi works)
+# Path B (Ollama): macOS or Linux, no GPU — Ollama + Qwen3.5 27B
+#                  Requires: 32+ GB RAM (16 GB Macs use qwen3.5:9b)
 #
 # Usage:
 #   cd <repo-root>
-#   bash setup.sh            # full setup (local vLLM + model download)
-#   bash setup.sh --cloud    # cloud-only (skips vLLM, model download, disk check)
+#   bash setup.sh            # auto-detects GPU or Ollama path
 # ============================================================================
 set -uo pipefail
 
@@ -27,13 +22,6 @@ if [ -z "${TMUX:-}" ] && command -v tmux &>/dev/null; then
     echo "  Starting setup in tmux session 'setup' (survives SSH disconnects)..."
     exec tmux new-session -s setup "bash \"$0\" $*; echo; echo 'Setup complete. Press Enter to close.'; read"
 fi
-
-CLOUD_MODE=false
-for arg in "$@"; do
-    if [[ "$arg" == "--cloud" ]]; then
-        CLOUD_MODE=true
-    fi
-done
 
 REPO_ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$REPO_ROOT"
@@ -45,46 +33,58 @@ warn() { echo -e "${YELLOW}[WARN]${NC} $*"; }
 err()  { echo -e "${RED}[ERROR]${NC} $*"; }
 die()  { err "$*"; exit 1; }
 
-echo ""
-echo "============================================================"
-if $CLOUD_MODE; then
-    echo "  NAT Agent Lab - Cloud Setup (no local GPU needed)"
+# ============================================================================
+# Detect setup path: GPU (vLLM + MiniMax M2.5) or Ollama (no GPU)
+# ============================================================================
+if nvidia-smi &>/dev/null; then
+    MODE=gpu
+    echo ""
+    echo "============================================================"
+    echo "  NAT Agent Lab - Environment Setup (Path A: GPU / vLLM)"
+    echo "============================================================"
+    echo "  Repo: $REPO_ROOT"
+    echo ""
 else
-    echo "  NAT Agent Lab - Environment Setup"
-fi
-echo "============================================================"
-echo "  Repo: $REPO_ROOT"
-echo ""
-
-# ============================================================================
-# Pre-flight: Auto-detect missing GPU and suggest --cloud
-# ============================================================================
-if ! $CLOUD_MODE && ! nvidia-smi &>/dev/null; then
-    warn "No NVIDIA GPU detected (nvidia-smi not found)."
-    echo "  You cannot run the local vLLM model without GPUs."
+    MODE=ollama
     echo ""
-    echo "  Re-run with:  bash setup.sh --cloud"
+    echo "============================================================"
+    echo "  NAT Agent Lab - Environment Setup (Path B: Ollama / no GPU)"
+    echo "============================================================"
+    echo "  Repo: $REPO_ROOT"
+    echo "  No GPU detected — using Ollama path (Qwen3.5, local inference)."
     echo ""
-    echo "  The --cloud flag uses NVIDIA Build instead of local vLLM."
-    echo "  Same tools, same architecture, no GPU needed (uses Qwen 3.5-122B on NVIDIA Build)."
-    echo ""
-    die "Aborting. Re-run with: bash setup.sh --cloud"
 fi
 
 # ============================================================================
-# Step 1: Disk space check (skipped in --cloud mode)
+# Step 1: Disk space (GPU) or RAM check (Ollama)
 # ============================================================================
-if $CLOUD_MODE; then
-    log "Step 1/8: Disk space check skipped (cloud mode)"
-else
+if [ "$MODE" = gpu ]; then
     log "Step 1/8: Checking disk space..."
     AVAIL_GB=$(df -BG "$REPO_ROOT" | awk 'NR==2 {gsub("G",""); print $4}')
     if [ "$AVAIL_GB" -lt 300 ]; then
         die "Only ${AVAIL_GB}GB free. Need at least 300GB for model weights.
-  Clone the repo to a directory with more space (e.g., /ephemeral/, /data/).
-  Or run: bash setup.sh --cloud  (skips local model, uses NVIDIA Build instead)"
+  Clone the repo to a directory with more space (e.g., /ephemeral/, /data/)."
     fi
     ok "Disk space: ${AVAIL_GB}GB available"
+else
+    log "Step 1/8: Checking RAM for Ollama model selection..."
+    if [[ "$(uname)" == "Darwin" ]]; then
+        RAM_BYTES=$(sysctl -n hw.memsize 2>/dev/null || echo 0)
+        RAM_GB=$(( RAM_BYTES / 1024 / 1024 / 1024 ))
+    else
+        RAM_KB=$(awk '/MemTotal/ {print $2}' /proc/meminfo 2>/dev/null || echo 0)
+        RAM_GB=$(( RAM_KB / 1024 / 1024 ))
+    fi
+    if [ "$RAM_GB" -ge 32 ]; then
+        ok "RAM: ${RAM_GB}GB — using qwen3.5:27b (~17 GB, best accuracy)"
+        OLLAMA_MODEL="qwen3.5:27b"
+    elif [ "$RAM_GB" -ge 16 ]; then
+        warn "RAM: ${RAM_GB}GB — using qwen3.5:9b (~6.6 GB). For 27B, upgrade to 32+ GB RAM."
+        OLLAMA_MODEL="qwen3.5:9b"
+    else
+        warn "RAM: ${RAM_GB}GB — using qwen3.5:9b (~6.6 GB, 16 GB recommended)"
+        OLLAMA_MODEL="qwen3.5:9b"
+    fi
 fi
 
 # ============================================================================
@@ -121,15 +121,25 @@ ok "Python $(python3 --version) in .venv"
 # ============================================================================
 log "Step 3/8: Installing Python packages..."
 
-if python3 -c "import nat; import datasets; import openpyxl; import bs4; import pypdf; import pptx; import sympy" 2>/dev/null; then
+if python3 -c "import nat; import datasets; import openpyxl; import bs4; import pypdf; import pptx; import sympy; import dask; import distributed" 2>/dev/null; then
     ok "NAT and dependencies already installed"
 else
     log "Installing NAT and dependencies..."
-    uv pip install "nvidia-nat[langchain,phoenix]==1.5.0" arize-phoenix requests pyyaml datasets \
-        openpyxl beautifulsoup4 pypdf python-pptx sympy 2>/dev/null \
-        || pip install "nvidia-nat[langchain,phoenix]==1.5.0" arize-phoenix requests pyyaml datasets \
-        openpyxl beautifulsoup4 pypdf python-pptx sympy
+    uv pip install "nvidia-nat[langchain,phoenix]==1.5.0" "arize-phoenix==13.21.0" "arize-phoenix-evals>=2.12.0,<3" requests pyyaml datasets \
+        openpyxl beautifulsoup4 pypdf python-pptx sympy dask distributed 2>/dev/null \
+        || pip install "nvidia-nat[langchain,phoenix]==1.5.0" "arize-phoenix==13.21.0" "arize-phoenix-evals>=2.12.0,<3" requests pyyaml datasets \
+        openpyxl beautifulsoup4 pypdf python-pptx sympy dask distributed
     ok "NAT installed"
+fi
+
+# Ensure arize-phoenix-evals is <3 (3.0+ removed phoenix.evals.models used by arize-phoenix==13.21.0)
+if python3 -c "from phoenix.evals.models.rate_limiters import RateLimiter" 2>/dev/null; then
+    ok "arize-phoenix-evals version OK"
+else
+    log "Downgrading arize-phoenix-evals to 2.x (3.0+ is incompatible with arize-phoenix==13.21.0)..."
+    uv pip install "arize-phoenix-evals>=2.12.0,<3" 2>/dev/null \
+        || pip install "arize-phoenix-evals>=2.12.0,<3"
+    ok "arize-phoenix-evals downgraded"
 fi
 
 if python3 -c "from gaia_tools.register import read_file" 2>/dev/null; then
@@ -140,9 +150,7 @@ elif [ -f "gaia_tools/pyproject.toml" ]; then
     ok "GAIA tools installed"
 fi
 
-if $CLOUD_MODE; then
-    log "  vLLM install skipped (cloud mode)"
-else
+if [ "$MODE" = gpu ]; then
     if python3 -c "import vllm" 2>/dev/null; then
         ok "vLLM already installed"
     else
@@ -151,6 +159,8 @@ else
             || pip install "vllm==0.18.0"
         ok "vLLM installed"
     fi
+else
+    ok "Skipping vLLM (not needed for Ollama path)"
 fi
 
 # ============================================================================
@@ -165,8 +175,13 @@ elif command -v apt-get &>/dev/null; then
     sudo apt-get update -qq && sudo apt-get install -y -qq stockfish 2>/dev/null \
         && ok "Stockfish installed" \
         || warn "Stockfish install failed (solve_chess will use fallback)"
+elif command -v brew &>/dev/null; then
+    log "Installing Stockfish chess engine via Homebrew..."
+    brew install stockfish 2>/dev/null \
+        && ok "Stockfish installed" \
+        || warn "Stockfish install failed (solve_chess will use fallback)"
 else
-    warn "Stockfish not available (apt-get not found; macOS users: brew install stockfish)"
+    warn "Stockfish not available (install manually: brew install stockfish or apt-get install stockfish)"
 fi
 
 # ============================================================================
@@ -194,15 +209,34 @@ else
     ok "TAVILY_API_KEY set (${TAVILY_API_KEY:0:8}...)"
 fi
 
-if [ -z "${NGC_API_KEY:-}" ]; then
-    echo ""
-    echo "  NVIDIA Build API key is needed for vision models."
-    echo "  Get one at: https://build.nvidia.com/"
-    read -rp "  NGC_API_KEY: " NGC_API_KEY
-    [ -z "$NGC_API_KEY" ] && die "NGC key is required."
-    NEEDS_KEYS=true
+if [ "$MODE" = gpu ]; then
+    if [ -z "${NGC_API_KEY:-}" ]; then
+        echo ""
+        echo "  NVIDIA Build API key is needed for vision models."
+        echo "  Get one at: https://build.nvidia.com/"
+        read -rp "  NGC_API_KEY: " NGC_API_KEY
+        [ -z "$NGC_API_KEY" ] && die "NGC key is required."
+        NEEDS_KEYS=true
+    else
+        ok "NGC_API_KEY set (${NGC_API_KEY:0:8}...)"
+    fi
 else
-    ok "NGC_API_KEY set (${NGC_API_KEY:0:8}...)"
+    # Ollama path: NGC is optional (only needed for describe_image / transcribe_audio)
+    if [ -z "${NGC_API_KEY:-}" ]; then
+        echo ""
+        echo "  NVIDIA Build API key is optional for Ollama path."
+        echo "  It enables vision (describe_image) and audio (transcribe_audio) tools."
+        echo "  Get one free at: https://build.nvidia.com/ — press Enter to skip."
+        read -rp "  NGC_API_KEY (optional): " NGC_API_KEY
+        if [ -n "$NGC_API_KEY" ]; then
+            NEEDS_KEYS=true
+            ok "NGC_API_KEY set"
+        else
+            warn "NGC_API_KEY skipped — describe_image and transcribe_audio will not work"
+        fi
+    else
+        ok "NGC_API_KEY set (${NGC_API_KEY:0:8}...)"
+    fi
 fi
 
 if [ -z "${HF_TOKEN:-}" ]; then
@@ -223,12 +257,14 @@ if $NEEDS_KEYS; then
 import os, re
 keys = {
     'TAVILY_API_KEY': '''${TAVILY_API_KEY}''',
-    'NGC_API_KEY': '''${NGC_API_KEY}''',
+    'NGC_API_KEY': '''${NGC_API_KEY:-}''',
     'HF_TOKEN': '''${HF_TOKEN}''',
 }
 env_path = '.env'
 lines = open(env_path).readlines() if os.path.exists(env_path) else []
 for key, val in keys.items():
+    if not val:
+        continue
     pattern = re.compile(r'^(export\s+)?' + re.escape(key) + r'=.*$')
     found = False
     for i, line in enumerate(lines):
@@ -244,14 +280,13 @@ with open(env_path, 'w') as f:
     ok "Keys saved to .env"
 fi
 
-export TAVILY_API_KEY NGC_API_KEY HF_TOKEN
+export TAVILY_API_KEY HF_TOKEN
+[ -n "${NGC_API_KEY:-}" ] && export NGC_API_KEY
 
 # ============================================================================
-# Step 6: Download model weights (skipped in --cloud mode)
+# Step 6: Model setup
 # ============================================================================
-if $CLOUD_MODE; then
-    log "Step 6/8: Model download skipped (cloud mode, using NVIDIA Build)"
-else
+if [ "$MODE" = gpu ]; then
     log "Step 6/8: Checking model weights..."
 
     export HF_HOME="$REPO_ROOT/.cache/huggingface"
@@ -276,12 +311,85 @@ else
         huggingface-cli download "$MODEL_ID"
         ok "Model download complete"
     fi
+else
+    log "Step 6/8: Setting up Ollama and pulling model..."
+
+    # Install Ollama if not present
+    if command -v ollama &>/dev/null; then
+        ok "Ollama already installed ($(ollama --version 2>/dev/null || echo 'version unknown'))"
+    else
+        log "Installing Ollama..."
+        if [[ "$(uname)" == "Darwin" ]]; then
+            if command -v brew &>/dev/null; then
+                brew install ollama \
+                    && ok "Ollama installed via Homebrew" \
+                    || die "Ollama install failed. Install manually: https://ollama.com/"
+            else
+                die "Homebrew not found. Install Ollama manually from https://ollama.com/ then re-run setup."
+            fi
+        else
+            curl -fsSL https://ollama.com/install.sh | sh \
+                && ok "Ollama installed" \
+                || die "Ollama install failed. Install manually: https://ollama.com/"
+        fi
+    fi
+
+    # Start ollama serve if not already running
+    if curl -sf http://localhost:11434 &>/dev/null; then
+        ok "Ollama already running on port 11434"
+    else
+        log "Starting Ollama server..."
+        if [[ "$(uname)" == "Darwin" ]] && command -v brew &>/dev/null \
+                && brew services list 2>/dev/null | grep -q ollama; then
+            brew services start ollama 2>/dev/null || true
+        else
+            nohup ollama serve > /tmp/ollama_serve.log 2>&1 &
+            disown
+        fi
+        # Wait for Ollama to be ready
+        WAITED=0
+        while ! curl -sf http://localhost:11434 &>/dev/null; do
+            sleep 2
+            WAITED=$((WAITED + 2))
+            if [ $WAITED -ge 30 ]; then
+                die "Ollama server didn't start after 30s. Check /tmp/ollama_serve.log"
+            fi
+            printf "."
+        done
+        echo ""
+        ok "Ollama server ready after ${WAITED}s"
+    fi
+
+    # Pull the model
+    if ollama list 2>/dev/null | grep -q "^${OLLAMA_MODEL}"; then
+        ok "Model ${OLLAMA_MODEL} already pulled"
+    else
+        log "Pulling ${OLLAMA_MODEL} (this may take several minutes)..."
+        ollama pull "${OLLAMA_MODEL}" \
+            && ok "Model ${OLLAMA_MODEL} ready" \
+            || die "Failed to pull ${OLLAMA_MODEL}. Check your internet connection."
+    fi
+
+    # Update the Ollama agent config to match the selected model
+    OLLAMA_CONFIG="ultrafast-ollama-agent/gaia_agent_ultrafast_ollama.yml"
+    if [ -f "$OLLAMA_CONFIG" ]; then
+        python3 -c "
+import re, sys
+path = '$OLLAMA_CONFIG'
+model = '$OLLAMA_MODEL'
+text = open(path).read()
+updated = re.sub(r'(model_name:\s*)qwen3\.5:\w+', r'\g<1>' + model, text)
+if updated != text:
+    open(path, 'w').write(updated)
+    print('  Updated model_name to ' + model + ' in ' + path)
+"
+    fi
 fi
 
 # ============================================================================
 # Step 7: GAIA questions and files
 # ============================================================================
-# Ensure HF cache is local and writable (cloud .env may have a stale HF_HOME
+# Ensure HF cache is local and writable (.env may have a stale HF_HOME
 # from another machine, e.g. /ephemeral on a GPU instance).
 if [ -z "${HF_HOME:-}" ] || ! mkdir -p "$HF_HOME" 2>/dev/null; then
     export HF_HOME="$REPO_ROOT/.cache/huggingface"
@@ -290,9 +398,10 @@ fi
 
 log "Step 7/8: Checking GAIA questions..."
 
-if [ -f "gaia_questions.json" ]; then
+if [ -f "gaia_questions.json" ] && [ -f "gaia_dev_questions.json" ]; then
     Q_COUNT=$(python3 -c "import json; print(len(json.load(open('gaia_questions.json'))))" 2>/dev/null || echo "0")
-    ok "GAIA questions already present ($Q_COUNT questions)"
+    DEV_COUNT=$(python3 -c "import json; print(len(json.load(open('gaia_dev_questions.json'))))" 2>/dev/null || echo "0")
+    ok "GAIA questions already present ($Q_COUNT test + $DEV_COUNT dev)"
 else
     log "Downloading GAIA questions (needs HF_TOKEN with dataset access)..."
     log "  If this fails, accept the terms at: https://huggingface.co/datasets/gaia-benchmark/GAIA"
@@ -310,21 +419,22 @@ log "Step 8/8: Verifying installation..."
 ERRORS=0
 
 python3 -c "import nat" 2>/dev/null && ok "Python: nat" || { err "Python: nat NOT importable"; ERRORS=$((ERRORS+1)); }
-if ! $CLOUD_MODE; then
-    python3 -c "import vllm" 2>/dev/null && ok "Python: vllm" || { err "Python: vllm NOT importable"; ERRORS=$((ERRORS+1)); }
-fi
 python3 -c "import requests" 2>/dev/null && ok "Python: requests" || { err "Python: requests NOT importable"; ERRORS=$((ERRORS+1)); }
 python3 -c "import yaml" 2>/dev/null && ok "Python: yaml" || { err "Python: yaml NOT importable"; ERRORS=$((ERRORS+1)); }
+
+if [ "$MODE" = gpu ]; then
+    python3 -c "import vllm" 2>/dev/null && ok "Python: vllm" || { err "Python: vllm NOT importable"; ERRORS=$((ERRORS+1)); }
+    nvidia-smi &>/dev/null && ok "NVIDIA GPUs detected" || warn "nvidia-smi failed (vLLM will not work without GPUs)"
+else
+    command -v ollama &>/dev/null && ok "Ollama CLI available" || { err "Ollama CLI not found"; ERRORS=$((ERRORS+1)); }
+    curl -sf http://localhost:11434 &>/dev/null && ok "Ollama server running" || { err "Ollama server not responding on port 11434"; ERRORS=$((ERRORS+1)); }
+    ollama list 2>/dev/null | grep -q "^${OLLAMA_MODEL}" && ok "Model ${OLLAMA_MODEL} available" || { err "Model ${OLLAMA_MODEL} not found in ollama list"; ERRORS=$((ERRORS+1)); }
+fi
 
 [ -f "gaia_questions.json" ] && ok "GAIA questions file present" || warn "gaia_questions.json not found (run prep_gaia_data.py)"
 [ -d "gaia_files" ] && ok "GAIA files directory present" || warn "gaia_files/ not found (run prep_gaia_data.py)"
 
 command -v stockfish &>/dev/null && ok "Stockfish available" || warn "Stockfish not available"
-if $CLOUD_MODE; then
-    nvidia-smi &>/dev/null && ok "NVIDIA GPUs detected (optional for cloud)" || ok "No local GPU (using cloud LLM)"
-else
-    nvidia-smi &>/dev/null && ok "NVIDIA GPUs detected" || err "nvidia-smi failed"
-fi
 
 echo ""
 echo "============================================================"
@@ -335,13 +445,25 @@ else
 fi
 echo "============================================================"
 echo ""
-echo "  Next steps (run from this directory):"
-echo ""
-if $CLOUD_MODE; then
-    echo "    1. ./ask                                 # start chatting (auto-selects ultrafast-nogpu)"
-else
+
+if [ "$MODE" = gpu ]; then
+    echo "  Next steps (run from this directory):"
+    echo ""
     echo "    1. bash gaia_tools/start_services.sh    # start vLLM + Phoenix"
     echo "    2. ./ask                                 # start chatting with your agent"
+else
+    echo "  Next steps (run from this directory):"
+    echo ""
+    echo "    1. ./ask                                 # start chatting"
+    echo "       switch ollama                         # load the Ollama agent"
+    echo ""
+    echo "  The Ollama agent runs locally — no GPU or vLLM needed."
+    echo "  Model: ${OLLAMA_MODEL} | Endpoint: http://localhost:11434"
+    if [ -z "${NGC_API_KEY:-}" ]; then
+        echo ""
+        echo "  Note: NGC_API_KEY was skipped. describe_image and transcribe_audio"
+        echo "  tools will not work. Add NGC_API_KEY to .env to enable them."
+    fi
 fi
 echo ""
 echo "============================================================"
