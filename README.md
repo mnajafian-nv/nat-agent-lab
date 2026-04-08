@@ -230,35 +230,24 @@ You should see `Agent: ultrafast | vLLM: OK | NAT: OK | Phoenix: OK`. All agents
 **What you need:**
 - macOS (Apple Silicon M1/M2/M3/M4) or Linux. No GPU required.
 - **32 GB RAM recommended** (the default 27B model uses ~17 GB). 16 GB Macs: edit config to use `qwen3.5:9b` (~6.6 GB) instead.
-- **2 API keys**: [Tavily](https://tavily.com/) (search) and [HuggingFace](https://huggingface.co/settings/tokens) (dataset).
-- [Ollama](https://ollama.com/) installed: `brew install ollama` on macOS, or see [ollama.com](https://ollama.com/) for Linux.
+- **2 API keys required**: [Tavily](https://tavily.com/) (search) and [HuggingFace](https://huggingface.co/settings/tokens) (dataset). [NVIDIA Build](https://build.nvidia.com/) is optional — only needed for vision and audio tools.
+- No Ollama pre-install needed — `setup.sh` installs it automatically.
 
 **Steps:**
 
 ```bash
-# 1. Install Ollama and pull the model (~17 GB download; ~6.6 GB for qwen3.5:9b)
-brew install ollama          # macOS; see ollama.com for Linux
-ollama serve &               # start Ollama in the background
-ollama pull qwen3.5:27b            # 17 GB; for 16 GB Macs use: ollama pull qwen3.5:9b
-
-# 2. Clone the repo
 git clone https://github.com/mnajafian-nv/nat-agent-lab.git nat-agent-lab
 cd nat-agent-lab
+bash setup.sh    # auto-detects no GPU; installs Ollama, pulls model, prompts for keys
+./ask            # start chatting
+```
 
-# 3. Set up Python environment
-python3 -m venv .venv && source .venv/bin/activate
-pip install "nvidia-nat[langchain,phoenix]==1.5.0" requests pyyaml datasets \
-    openpyxl beautifulsoup4 pypdf python-pptx sympy dask distributed
-pip install -e gaia_tools/
-
-# 4. Add your API keys
-cp .env.example .env
-# Edit .env and add your TAVILY_API_KEY and HF_TOKEN
-
-# 5. Start chatting
-./ask
+Then at the prompt:
+```
 switch ollama
 ```
+
+`setup.sh` auto-detects that you have no GPU and handles everything: installs Ollama if needed, selects the right model based on your RAM (27b for 32+ GB, 9b for 16 GB), pulls it, sets up the Python environment, and prompts for API keys.
 
 You should see `Agent: ollama | vLLM: off (not needed) | NAT: OK`. The agent runs locally. Only Tavily (web search) and HuggingFace (dataset) need API keys.
 
