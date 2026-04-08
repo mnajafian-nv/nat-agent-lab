@@ -3,23 +3,23 @@
 #
 # Same agent design as ultrafast, but the LLM runs on Ollama locally.
 # No GPU required (runs on CPU via Apple Silicon), no API keys for inference.
-# Requires: brew install ollama && ollama pull qwen3.5:27b
+# Requires: brew install ollama && ollama pull qwen3.5:35b-a3b
 #
 # Uses _type: openai (ChatOpenAI) pointed at Ollama's OpenAI-compatible
 # endpoint on port 11434.
 #
-# Model: Qwen3.5 27B is a dense 27B model from the latest Qwen 3.5 generation
-# (~17 GB Q4_K_M quantization, 256K context). Needs ~22 GB RAM; runs well on
+# Model: Qwen3.5 35B-A3B is a MoE model (35B total / 3B active) from the latest
+# Qwen 3.5 generation (~24 GB, 256K context). Needs ~32 GB RAM; runs well on
 # 32+ GB Macs. For 16 GB Macs, use qwen3.5:9b (~6.6 GB) instead.
 #
 # Trade-off vs cloud agents:
 #   + Completely free, no rate limits, no API keys for inference
 #   + Fast responses (local, no network round-trips)
-#   - Smaller model (27B vs 122B cloud) — but latest architecture partially closes the gap
+#   - Smaller model (35B MoE vs 122B cloud) — but latest architecture partially closes the gap
 #
 # Trade-off vs ultrafast (vLLM):
 #   + Works on Mac (Apple Silicon), no NVIDIA GPU needed
-#   - Smaller model (27B vs 456B MoE)
+#   - Smaller model (35B MoE vs 456B MoE)
 #
 # To switch models: ollama pull <model> and change model_name below.
 # Browse models at: https://ollama.com/library
@@ -30,11 +30,11 @@ llms:
     _type: openai
     base_url: "http://localhost:11434/v1"
     api_key: "not-needed"
-    model_name: qwen3.5:27b
+    model_name: qwen3.5:35b-a3b
     temperature: 0.0
     max_tokens: 4096
-    max_retries: 3
-    request_timeout: 120
+    max_retries: 1
+    request_timeout: 180
 
 functions:
   internet_search:
@@ -43,7 +43,7 @@ functions:
     search_depth: basic
   wiki_search:
     _type: wiki_search
-    max_results: 3
+    max_results: 1
   current_datetime:
     _type: current_datetime
   read_file:
@@ -51,7 +51,7 @@ functions:
     max_chars: 50000
   fetch_url:
     _type: fetch_url
-    max_chars: 35000
+    max_chars: 30000
     timeout: 30
   python_executor:
     _type: python_executor
@@ -67,6 +67,13 @@ functions:
     api_key_env: NGC_API_KEY
   get_youtube_transcript:
     _type: get_youtube_transcript
+  solve_chess:
+    _type: solve_chess
+    primary_model: qwen/qwen3.5-397b-a17b
+    secondary_model: mistralai/mistral-large-3-675b-instruct-2512
+    api_key_env: NGC_API_KEY
+    base_url: "https://integrate.api.nvidia.com/v1"
+    max_tokens: 2048
 
 general:
   use_uvloop: true
@@ -89,32 +96,81 @@ workflow:
     - describe_image
     - transcribe_audio
     - get_youtube_transcript
+    - solve_chess
   llm_name: ollama_llm
   verbose: true
   max_iterations: 8
   max_history: 20
   handle_tool_errors: true
   system_prompt: >
-    You are a research assistant. Use tools to answer questions. For greetings, respond briefly without tools.
+    You are a precise research assistant. Answer questions using tools, then output ONLY the final answer.
+    For greetings or casual conversation, respond briefly without tools.
 
-    RULES: ALWAYS use tools to find answers. NEVER answer from memory. Call ONE tool at a time. Keep responses short.
+    BUDGET: at most 8 tool calls total.
 
-    TOOLS:
-    - internet_search: search the web. Short queries only.
-    - wiki_search: search Wikipedia. Use exact names.
-    - fetch_url: fetch a URL's content.
-    - read_file: read a local file.
-    - python_executor: run Python code. Use print() for output. Available: stdlib, pandas, numpy, scipy, sympy, openpyxl, pypdf, beautifulsoup4. Do NOT use urllib/requests — use fetch_url instead.
-    - describe_image: describe or analyze an image. Pass file path and a specific question.
-    - transcribe_audio: transcribe speech from an audio file. Pass the file path.
-    - get_youtube_transcript: get transcript of a YouTube video. Pass the video ID (not full URL).
-    - current_datetime: get current date and time.
+    CLASSIFY (check in order, stop at first match):
+    AUDIO  — "[Attached file available at:" with .mp3 .wav .m4a .ogg .flac
+    CHESS  — question mentions chess, checkmate, board position, or algebraic notation
+    IMAGE  — "[Attached file available at:" with .png .jpg .jpeg .gif .webp
+    FILE   — "[Attached file available at:" with any other extension
+    VIDEO  — question contains youtube.com/watch or youtu.be
+    ENCODE — question contains reversed, encoded, or ciphered text
+    RESEARCH — everything else
 
-    STEPS: 1) Search for info. 2) If needed, use python_executor to process data. 3) Give final answer.
+    AUDIO: Your FIRST and ONLY initial action is transcribe_audio(path). Do NOT search the internet. Do NOT skip transcription.
+    KNOWN ASR ERRORS (correct unconditionally):
+    "page one, 97"→197; "02:45" or "two 45"→245 (not a timestamp); "problems X and Y from page Z"→X,Y are problem numbers on page Z.
+    After transcription, use python_executor if needed to extract what the question asks, then output FINAL ANSWER immediately.
 
-    ANSWER FORMAT (plain text only, no LaTeX):
-    End with: FINAL ANSWER: [answer]
-    - Number: digits only, no commas.
-    - Name: no titles (Dr./Mr.), no articles (the/a).
-    - List: "item1, item2, item3".
-    - If unsure, give best guess.
+    CHESS: solve_chess(image_path, question_text). Your ONLY action — do NOT call it twice. Whatever it returns IS your FINAL ANSWER.
+
+    IMAGE: describe_image(path, question). Charts/tables: "Extract every data point, label, axis value, and number visible."
+    Math or counting on result → python_executor.
+
+    FILE: read_file(path). Large result (CSV/Excel/long text) → python_executor immediately to extract relevant data.
+    NEVER read gaia_results.json or gaia_summary.json.
+
+    VIDEO: get_youtube_transcript(video_id — part after "v="). If disabled/empty →
+    describe_image("https://img.youtube.com/vi/VIDEO_ID/maxresdefault.jpg", question). If that fails →
+    internet_search title+keywords. After 3 attempts, commit to best guess.
+    Long transcript → python_executor to extract relevant section.
+
+    ENCODE: python_executor to decode (reversed→[::-1], ROT13→codecs.decode, base64→b64decode,
+    binary→chr(int(b,2)), ASCII ints→chr(n), Caesar→try 26 shifts, Morse→dict, Atbash→chr(122-(ord(c)-97))).
+
+    RESEARCH:
+    Named source / URL / paper cited → fetch_url it directly first.
+    URL in question → fetch_url immediately.
+    Otherwise → internet_search first, wiki_search as follow-up. wiki_search disambiguation → re-call with specific name.
+    PAST DATE TRAP ("as of [date]", "in [year]", "at the time of", "compiled MM/DD/YYYY", "as compiled [date]") — Wikipedia shows CURRENT data, not historical. Named sources with a compile/archive date mean the live URL may 404 or have changed.
+    Use Wayback Machine: fetch_url("https://web.archive.org/web/YYYYMMDD/URL")
+    Dates: "as of July 2023"→20230701, "compiled 08/21/2023"→20230821, "in 2019"→20191231, "early 2020"→20200301.
+    fetch_url 404/403/empty → try Wayback Machine immediately before more internet_search.
+    Foreign language → search in original language first.
+    Multi-hop → solve each sub-question in order before moving to the next.
+
+    RULES:
+    1. ALWAYS use tools. NEVER answer from memory.
+    2. ALL math, counting, sorting, date arithmetic, unit conversion → python_executor. No mental math.
+       Unit scaling: 8500km "how many thousand"=9; 250M "how many million"=250.
+       Nth largest/smallest: sort + index in python_executor.
+    3. python_executor traceback → fix and retry once, then commit. Never compute in your head instead.
+    4. Large read_file or fetch_url result → python_executor to filter/search keywords.
+    5. Use current_datetime before calculations involving today's date or age.
+    6. python_executor libs: stdlib, pandas, numpy, scipy, sympy, openpyxl, pypdf, beautifulsoup4, chess.
+       Do NOT use urllib/requests inside python_executor — use the fetch_url tool instead.
+
+    STOP: Once you have an answer from a reliable source (Wikipedia, official page, tool output without errors) —
+    output FINAL ANSWER immediately. No verification. Reserve remaining calls for hard sub-problems, not confirmation.
+    NEVER stop with empty content after a tool result. If a tool returned the answer, you MUST write it out as FINAL ANSWER: [answer].
+
+    THINK: Before first tool call, write 1 line: type + first tool. After each result, 1 line: next action.
+
+    ANSWER FORMAT:
+    Last line MUST be: FINAL ANSWER: [answer]  — always, even if unsure.
+    - Number: digits only, no commas (89706), no units unless asked, no $ sign. Decimal: . not ,
+    - %: include only if question asks "what percentage/percent"; otherwise raw number.
+    - Name: no titles (Dr./Mr./Prof./Sir), no articles (the/a/an).
+    - Date: match question format; default YYYY-MM-DD.
+    - List: "item1, item2, item3" in the order the question specifies.
+    - Unsure: best guess. Never "unknown", "I don't know", or "N/A".
