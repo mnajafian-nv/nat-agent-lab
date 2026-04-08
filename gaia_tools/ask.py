@@ -1442,21 +1442,39 @@ def main():
     else:
         backend = "local Ollama"
     print(f"\n  Starting NeMo Agent Toolkit (NAT) with {agent_name} agent (default, {backend})...")
-    print(f"  Type 'switch' to change agent, or 'info' to see current config.")
+    print(f"  Type 'help' or browse questions while NAT loads in the background.")
 
-    # Start NAT synchronously with a spinner so it's ready before the prompt
-    if not start_nat(config_path, show_spinner=True):
-        if check_service(NAT_HEALTH):
-            print("  Using previously running NAT instance.")
-        else:
-            print("  NAT failed to start. Use 'switch' to try again, or 'status' to diagnose.")
+    # Start NAT in background so the prompt appears immediately
+    _nat_ready = threading.Event()
+    _nat_result = [None]
+    _nat_notified = [False]
+
+    def _nat_start_bg():
+        result = start_nat(config_path, show_spinner=False)
+        _nat_result[0] = result
+        _nat_ready.set()
+
+    threading.Thread(target=_nat_start_bg, daemon=True).start()
 
     verbose = True
     conversation = []
     config_ctx = build_config_context(config_path)
     print_status_line(agent_name, verbose, config_path)
+    if agent_name == "ollama":
+        print("  Note: the first response will be slow (20-40s) while the model loads into RAM.")
+        print("  Subsequent responses will be faster once weights are cached.")
 
     while True:
+        # Print NAT-ready notification before the next prompt (safe: not mid-input)
+        if _nat_ready.is_set() and not _nat_notified[0]:
+            _nat_notified[0] = True
+            if _nat_result[0]:
+                print("  NAT is ready.")
+            elif check_service(NAT_HEALTH):
+                print("  Using previously running NAT instance.")
+            else:
+                print("  NAT failed to start. Use 'switch' to try again, or 'status' to diagnose.")
+
         turn = len(conversation) // 2
         prompt_str = f"ask [{turn}]> " if turn > 0 else "ask> "
         try:
@@ -1580,6 +1598,12 @@ def main():
             elif len(raw_args) == 1 and raw_args[0] in ("1", "2", "3"):
                 cmd_level(qset, level_str=raw_args[0], is_dev=is_dev)
             elif len(raw_args) == 2 and raw_args[0] in ("1", "2", "3") and raw_args[1].isdigit():
+                if not _nat_ready.is_set():
+                    print("  NAT is still starting up, please wait...", end="", flush=True)
+                    _nat_ready.wait(timeout=120)
+                    print()
+                    if not _nat_notified[0]:
+                        _nat_notified[0] = True
                 lvl, pos = raw_args[0], int(raw_args[1])
                 try:
                     prompt, answer = cmd_gaia(qset, lvl, pos, verbose, config_path, is_dev=is_dev)
@@ -1659,6 +1683,14 @@ def main():
                 print("  Cannot switch agents while a benchmark is running.")
                 print("  Wait for it to finish, or cancel it first.")
                 continue
+            # Wait for any background NAT startup to finish before switching
+            # (two concurrent gaia_run.sh calls fight over pkill -9 and cause Killed:9 errors)
+            if not _nat_ready.is_set():
+                print("  Waiting for NAT startup to finish before switching...", end="", flush=True)
+                _nat_ready.wait(timeout=120)
+                print()
+                if not _nat_notified[0]:
+                    _nat_notified[0] = True
             raw_arg = parts[1].strip() if len(parts) > 1 else ""
             arg_lower = raw_arg.lower()
             if arg_lower in AGENTS:
@@ -1689,6 +1721,9 @@ def main():
                         conversation.clear()
                         config_ctx = build_config_context(config_path)
                         print_status_compact(agent_name, verbose, config_path)
+                        if agent_name == "ollama":
+                            print("  Note: the first response will be slow (20-40s) while the model loads into RAM.")
+                            print("  Subsequent responses will be faster once weights are cached.")
                     else:
                         print("  Switch failed. Previous agent may still be running.")
                 except KeyboardInterrupt:
@@ -1709,6 +1744,13 @@ def main():
             if _IDENTITY_PATTERNS.search(line):
                 _print_agent_info(agent_name, config_path)
                 continue
+
+            if not _nat_ready.is_set():
+                print("  NAT is still starting up, please wait...", end="", flush=True)
+                _nat_ready.wait(timeout=120)
+                print()
+                if not _nat_notified[0]:
+                    _nat_notified[0] = True
 
             if not check_service(NAT_HEALTH):
                 print("  NAT is not running. Use 'switch' to start an agent.")
