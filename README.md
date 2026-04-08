@@ -148,14 +148,14 @@ ask> switch my-agent/config.yml
 
 ## Agent Architectures
 
-The GPU agents (single, multi, ultrafast) share the full tool set: `internet_search`, `wiki_search`, `read_file`, `fetch_url`, `python_executor`, `describe_image`, `describe_image_alt`, `transcribe_audio`, `get_youtube_transcript`, `solve_chess`, `current_datetime`. The Ollama agent has most of these but skips `describe_image_alt` to keep context smaller.
+The GPU agents (single, multi, ultrafast) share the full tool set: `internet_search`, `wiki_search`, `read_file`, `fetch_url`, `python_executor`, `describe_image`, `describe_image_alt`, `transcribe_audio`, `get_youtube_transcript`, `solve_chess`, `current_datetime`. The Ollama-served agent has most of these but skips `describe_image_alt` to keep context smaller.
 
 | Agent | Config | Architecture | LLM | Key difference |
 |-------|--------|-------------|-----|----------------|
-| **Single** | [`single-agent/gaia_agent.yml`](single-agent/gaia_agent.yml) | Flat `tool_calling_agent` with direct access to all tools | MiniMax M2.5 456B MoE (local vLLM) | Simplest design. One LLM call per tool step, no routing overhead. |
-| **Multi** | [`multi-agent/gaia_agent_multi.yml`](multi-agent/gaia_agent_multi.yml) | Orchestrator dispatches to 3 specialist sub-agents (web, file, multimedia) | MiniMax M2.5 456B MoE (local vLLM) | Extra LLM call for routing, but specialists get focused prompts and tools. |
-| **Ultrafast** | [`ultrafast-agent/gaia_agent_ultrafast.yml`](ultrafast-agent/gaia_agent_ultrafast.yml) | Flat agent with TYPE A/B/C/D routing baked into the system prompt | MiniMax M2.5 456B MoE (local vLLM) | Same flat architecture as Single, but prompt-driven routing skips the orchestrator call. |
-| **Ollama** | [`ultrafast-ollama-agent/gaia_agent_ultrafast_ollama.yml`](ultrafast-ollama-agent/gaia_agent_ultrafast_ollama.yml) | Same design as Ultrafast, running locally via Ollama | Qwen3.5 35B-A3B (CPU/Apple Silicon) | No GPU needed, no API keys for inference. MoE architecture (35B total / 3B active), needs 32+ GB RAM. For 16 GB Macs, edit config to use `qwen3.5:9b`. |
+| **Single** | [`single-agent/gaia_agent.yml`](single-agent/gaia_agent.yml) | Flat `tool_calling_agent` with direct access to all tools | MiniMax M2.5 456B MoE (vLLM serving) | Simplest design. One LLM call per tool step, no routing overhead. |
+| **Multi** | [`multi-agent/gaia_agent_multi.yml`](multi-agent/gaia_agent_multi.yml) | Orchestrator dispatches to 3 specialist sub-agents (web, file, multimedia) | MiniMax M2.5 456B MoE (vLLM serving) | Extra LLM call for routing, but specialists get focused prompts and tools. |
+| **Ultrafast** | [`ultrafast-agent/gaia_agent_ultrafast.yml`](ultrafast-agent/gaia_agent_ultrafast.yml) | Flat agent with TYPE A/B/C/D routing baked into the system prompt | MiniMax M2.5 456B MoE (vLLM serving) | Same flat architecture as Single, but prompt-driven routing skips the orchestrator call. |
+| **Ollama Served** | [`ultrafast-ollama-agent/gaia_agent_ultrafast_ollama.yml`](ultrafast-ollama-agent/gaia_agent_ultrafast_ollama.yml) | Same design as Ultrafast, running locally via Ollama | Qwen3.5 35B-A3B (Ollama serving) | No GPU needed, no API keys for inference. Ollama can serve various models; default is a MoE model (35B total / 3B active), needs 32+ GB RAM. For 16 GB Macs, edit config to use `qwen3.5:9b`. |
 
 Each agent is defined entirely by its YAML config. NAT supports additional architectures (`react_agent`, `router_agent`, `sequential_executor`, etc.). See step 6 for how to experiment.
 
@@ -341,7 +341,7 @@ bash gaia_tools/gaia_run.sh -c my-agent/config.yml   # your custom config
 - Check if it's still loading: `tmux attach -t vllm` (Ctrl+B, D to detach)
 
 **No GPU / macOS**
-- Use the Ollama agent instead. See [Path B](#path-b-local-ollama-no-gpu) setup.
+- Use the Ollama-served agent instead. See [Path B](#path-b-local-ollama-no-gpu) setup.
 
 ## File Structure
 
@@ -359,7 +359,7 @@ bash gaia_tools/gaia_run.sh -c my-agent/config.yml   # your custom config
 ├── ultrafast-agent/
 │   └── gaia_agent_ultrafast.yml        # Ultrafast agent with prompt-driven routing
 ├── ultrafast-ollama-agent/
-│   └── gaia_agent_ultrafast_ollama.yml # Ollama agent (no GPU needed)
+│   └── gaia_agent_ultrafast_ollama.yml # Ollama-served agent (various models, no GPU needed)
 └── gaia_tools/
     ├── ask.py                          # Interactive chat engine
     ├── gaia_run.sh                     # Benchmark runner
