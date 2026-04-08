@@ -5,19 +5,14 @@
 # Installs all dependencies, downloads the model, and verifies the environment.
 # Safe to re-run (all steps are idempotent).
 #
-# Prerequisites (local LLM):
+# Prerequisites:
 #   - Linux with 8x H100 GPUs (or equivalent)
 #   - 300 GB free disk space in the cloned directory
 #   - NVIDIA driver installed (nvidia-smi works)
 #
-# Prerequisites (cloud LLM - use --cloud flag):
-#   - Any Linux machine (no GPU required for the LLM)
-#   - NGC_API_KEY with access to build.nvidia.com
-#
 # Usage:
 #   cd <repo-root>
 #   bash setup.sh            # full setup (local vLLM + model download)
-#   bash setup.sh --cloud    # cloud-only (skips vLLM, model download, disk check)
 # ============================================================================
 set -uo pipefail
 
@@ -27,13 +22,6 @@ if [ -z "${TMUX:-}" ] && command -v tmux &>/dev/null; then
     echo "  Starting setup in tmux session 'setup' (survives SSH disconnects)..."
     exec tmux new-session -s setup "bash \"$0\" $*; echo; echo 'Setup complete. Press Enter to close.'; read"
 fi
-
-CLOUD_MODE=false
-for arg in "$@"; do
-    if [[ "$arg" == "--cloud" ]]; then
-        CLOUD_MODE=true
-    fi
-done
 
 REPO_ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$REPO_ROOT"
@@ -47,45 +35,32 @@ die()  { err "$*"; exit 1; }
 
 echo ""
 echo "============================================================"
-if $CLOUD_MODE; then
-    echo "  NAT Agent Lab - Cloud Setup (no local GPU needed)"
-else
-    echo "  NAT Agent Lab - Environment Setup"
-fi
+echo "  NAT Agent Lab - Environment Setup (GPU / vLLM)"
 echo "============================================================"
 echo "  Repo: $REPO_ROOT"
 echo ""
 
 # ============================================================================
-# Pre-flight: Auto-detect missing GPU and suggest --cloud
+# Pre-flight: Warn if no GPU detected
 # ============================================================================
-if ! $CLOUD_MODE && ! nvidia-smi &>/dev/null; then
+if ! nvidia-smi &>/dev/null; then
     warn "No NVIDIA GPU detected (nvidia-smi not found)."
-    echo "  You cannot run the local vLLM model without GPUs."
+    echo "  This setup script is for GPU machines (vLLM + MiniMax M2.5)."
+    echo "  For a no-GPU setup, use the Ollama agent instead — see README Path B."
     echo ""
-    echo "  Re-run with:  bash setup.sh --cloud"
-    echo ""
-    echo "  The --cloud flag uses NVIDIA Build instead of local vLLM."
-    echo "  Same tools, same architecture, no GPU needed (uses Qwen 3.5-122B on NVIDIA Build)."
-    echo ""
-    die "Aborting. Re-run with: bash setup.sh --cloud"
+    die "Aborting. No GPU detected."
 fi
 
 # ============================================================================
-# Step 1: Disk space check (skipped in --cloud mode)
+# Step 1: Disk space check
 # ============================================================================
-if $CLOUD_MODE; then
-    log "Step 1/8: Disk space check skipped (cloud mode)"
-else
-    log "Step 1/8: Checking disk space..."
-    AVAIL_GB=$(df -BG "$REPO_ROOT" | awk 'NR==2 {gsub("G",""); print $4}')
-    if [ "$AVAIL_GB" -lt 300 ]; then
-        die "Only ${AVAIL_GB}GB free. Need at least 300GB for model weights.
-  Clone the repo to a directory with more space (e.g., /ephemeral/, /data/).
-  Or run: bash setup.sh --cloud  (skips local model, uses NVIDIA Build instead)"
-    fi
-    ok "Disk space: ${AVAIL_GB}GB available"
+log "Step 1/8: Checking disk space..."
+AVAIL_GB=$(df -BG "$REPO_ROOT" | awk 'NR==2 {gsub("G",""); print $4}')
+if [ "$AVAIL_GB" -lt 300 ]; then
+    die "Only ${AVAIL_GB}GB free. Need at least 300GB for model weights.
+  Clone the repo to a directory with more space (e.g., /ephemeral/, /data/)."
 fi
+ok "Disk space: ${AVAIL_GB}GB available"
 
 # ============================================================================
 # Step 2: Python and virtual environment
@@ -140,17 +115,13 @@ elif [ -f "gaia_tools/pyproject.toml" ]; then
     ok "GAIA tools installed"
 fi
 
-if $CLOUD_MODE; then
-    log "  vLLM install skipped (cloud mode)"
+if python3 -c "import vllm" 2>/dev/null; then
+    ok "vLLM already installed"
 else
-    if python3 -c "import vllm" 2>/dev/null; then
-        ok "vLLM already installed"
-    else
-        log "Installing vLLM (this may take a few minutes)..."
-        uv pip install "vllm==0.18.0" --torch-backend=auto 2>/dev/null \
-            || pip install "vllm==0.18.0"
-        ok "vLLM installed"
-    fi
+    log "Installing vLLM (this may take a few minutes)..."
+    uv pip install "vllm==0.18.0" --torch-backend=auto 2>/dev/null \
+        || pip install "vllm==0.18.0"
+    ok "vLLM installed"
 fi
 
 # ============================================================================
@@ -247,41 +218,37 @@ fi
 export TAVILY_API_KEY NGC_API_KEY HF_TOKEN
 
 # ============================================================================
-# Step 6: Download model weights (skipped in --cloud mode)
+# Step 6: Download model weights
 # ============================================================================
-if $CLOUD_MODE; then
-    log "Step 6/8: Model download skipped (cloud mode, using NVIDIA Build)"
-else
-    log "Step 6/8: Checking model weights..."
+log "Step 6/8: Checking model weights..."
 
-    export HF_HOME="$REPO_ROOT/.cache/huggingface"
-    mkdir -p "$HF_HOME"
+export HF_HOME="$REPO_ROOT/.cache/huggingface"
+mkdir -p "$HF_HOME"
 
-    MODEL_ID="MiniMaxAI/MiniMax-M2.5"
-    MODEL_CACHE="$HF_HOME/hub/models--MiniMaxAI--MiniMax-M2.5"
+MODEL_ID="MiniMaxAI/MiniMax-M2.5"
+MODEL_CACHE="$HF_HOME/hub/models--MiniMaxAI--MiniMax-M2.5"
 
-    if [ -d "$MODEL_CACHE" ]; then
-        SHARD_COUNT=$(find "$MODEL_CACHE" -name "*.safetensors" 2>/dev/null | wc -l)
-        if [ "$SHARD_COUNT" -ge 40 ]; then
-            ok "Model already downloaded ($SHARD_COUNT shards)"
-        else
-            warn "Model partially downloaded ($SHARD_COUNT shards). Resuming..."
-            huggingface-cli download "$MODEL_ID"
-            ok "Model download complete"
-        fi
+if [ -d "$MODEL_CACHE" ]; then
+    SHARD_COUNT=$(find "$MODEL_CACHE" -name "*.safetensors" 2>/dev/null | wc -l)
+    if [ "$SHARD_COUNT" -ge 40 ]; then
+        ok "Model already downloaded ($SHARD_COUNT shards)"
     else
-        log "Downloading $MODEL_ID (~220GB). This takes 15-30 minutes..."
-        log "  Progress will show below. Safe to disconnect SSH (running in tmux)."
-        echo ""
+        warn "Model partially downloaded ($SHARD_COUNT shards). Resuming..."
         huggingface-cli download "$MODEL_ID"
         ok "Model download complete"
     fi
+else
+    log "Downloading $MODEL_ID (~220GB). This takes 15-30 minutes..."
+    log "  Progress will show below. Safe to disconnect SSH (running in tmux)."
+    echo ""
+    huggingface-cli download "$MODEL_ID"
+    ok "Model download complete"
 fi
 
 # ============================================================================
 # Step 7: GAIA questions and files
 # ============================================================================
-# Ensure HF cache is local and writable (cloud .env may have a stale HF_HOME
+# Ensure HF cache is local and writable (.env may have a stale HF_HOME
 # from another machine, e.g. /ephemeral on a GPU instance).
 if [ -z "${HF_HOME:-}" ] || ! mkdir -p "$HF_HOME" 2>/dev/null; then
     export HF_HOME="$REPO_ROOT/.cache/huggingface"
@@ -310,9 +277,7 @@ log "Step 8/8: Verifying installation..."
 ERRORS=0
 
 python3 -c "import nat" 2>/dev/null && ok "Python: nat" || { err "Python: nat NOT importable"; ERRORS=$((ERRORS+1)); }
-if ! $CLOUD_MODE; then
-    python3 -c "import vllm" 2>/dev/null && ok "Python: vllm" || { err "Python: vllm NOT importable"; ERRORS=$((ERRORS+1)); }
-fi
+python3 -c "import vllm" 2>/dev/null && ok "Python: vllm" || { err "Python: vllm NOT importable"; ERRORS=$((ERRORS+1)); }
 python3 -c "import requests" 2>/dev/null && ok "Python: requests" || { err "Python: requests NOT importable"; ERRORS=$((ERRORS+1)); }
 python3 -c "import yaml" 2>/dev/null && ok "Python: yaml" || { err "Python: yaml NOT importable"; ERRORS=$((ERRORS+1)); }
 
@@ -320,11 +285,7 @@ python3 -c "import yaml" 2>/dev/null && ok "Python: yaml" || { err "Python: yaml
 [ -d "gaia_files" ] && ok "GAIA files directory present" || warn "gaia_files/ not found (run prep_gaia_data.py)"
 
 command -v stockfish &>/dev/null && ok "Stockfish available" || warn "Stockfish not available"
-if $CLOUD_MODE; then
-    nvidia-smi &>/dev/null && ok "NVIDIA GPUs detected (optional for cloud)" || ok "No local GPU (using cloud LLM)"
-else
-    nvidia-smi &>/dev/null && ok "NVIDIA GPUs detected" || err "nvidia-smi failed"
-fi
+nvidia-smi &>/dev/null && ok "NVIDIA GPUs detected" || warn "nvidia-smi failed (vLLM will not work without GPUs)"
 
 echo ""
 echo "============================================================"
@@ -337,11 +298,7 @@ echo "============================================================"
 echo ""
 echo "  Next steps (run from this directory):"
 echo ""
-if $CLOUD_MODE; then
-    echo "    1. ./ask                                 # start chatting (auto-selects ultrafast-nogpu)"
-else
-    echo "    1. bash gaia_tools/start_services.sh    # start vLLM + Phoenix"
-    echo "    2. ./ask                                 # start chatting with your agent"
-fi
+echo "    1. bash gaia_tools/start_services.sh    # start vLLM + Phoenix"
+echo "    2. ./ask                                 # start chatting with your agent"
 echo ""
 echo "============================================================"
