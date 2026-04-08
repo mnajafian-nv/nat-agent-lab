@@ -34,7 +34,7 @@ llms:
     temperature: 0.0
     max_tokens: 4096
     max_retries: 1
-    request_timeout: 180
+    request_timeout: 300
 
 functions:
   internet_search:

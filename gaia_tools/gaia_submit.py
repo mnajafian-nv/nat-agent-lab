@@ -473,7 +473,7 @@ def ask_with_retry(question_text: str, timeout: int) -> tuple[str, float, bool]:
         else:
             retry_q = question_text[:2000]
         short_prompt = RETRY_PROMPT_TEMPLATE.format(question=retry_q)
-        retry_timeout = min(timeout, 180) if retry_reason == "timeout" else timeout
+        retry_timeout = min(timeout, max(180, timeout // 2)) if retry_reason == "timeout" else timeout
         retry_start = time.time()
         retry_answer = ask_nat(short_prompt, timeout=retry_timeout)
         elapsed += time.time() - retry_start

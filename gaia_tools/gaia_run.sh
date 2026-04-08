@@ -75,7 +75,7 @@ while [[ $# -gt 0 ]]; do
         --ollama)
             CONFIG="ultrafast-ollama-agent/gaia_agent_ultrafast_ollama.yml"
             AGENT_MODE="Ollama"
-            BENCHMARK_TIMEOUT=360
+            BENCHMARK_TIMEOUT=720
             shift ;;
         -c|--config)    CONFIG="$2"; shift 2 ;;
         -u|--username)  USERNAME="$2"; shift 2 ;;
