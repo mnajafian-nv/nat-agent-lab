@@ -160,18 +160,32 @@ fi
 
 # 2. Check API keys
 log "Checking API keys..."
-if [[ -z "${TAVILY_API_KEY:-}" || -z "${NGC_API_KEY:-}" ]]; then
-    err "Required API keys not set. Add them to $REPO_ROOT/.env:"
-    echo "  TAVILY_API_KEY='tvly-...'"
-    echo "  NGC_API_KEY='nvapi-...'"
-    echo "  HF_TOKEN='hf_...'"
+if [[ ! -f "$REPO_ROOT/.env" ]]; then
+    err "No .env file found. Run setup first:"
+    echo ""
+    echo "    bash setup.sh"
+    echo ""
+    echo "  Setup will prompt you for API keys and save them to .env."
+    exit 1
+fi
+MISSING_KEYS=()
+[[ -z "${TAVILY_API_KEY:-}" ]] && MISSING_KEYS+=("TAVILY_API_KEY (get one at https://tavily.com/)")
+[[ -z "${NGC_API_KEY:-}" ]]   && MISSING_KEYS+=("NGC_API_KEY (get one at https://build.nvidia.com/)")
+if [[ ${#MISSING_KEYS[@]} -gt 0 ]]; then
+    err "Missing required API keys in $REPO_ROOT/.env:"
+    for key in "${MISSING_KEYS[@]}"; do
+        echo "    - $key"
+    done
+    echo ""
+    echo "  Either re-run setup:  bash setup.sh"
+    echo "  Or add them manually: edit .env and add the missing keys."
     exit 1
 fi
 if [[ -z "${HF_TOKEN:-}" ]]; then
-    warn "HF_TOKEN not set. Leaderboard submission may fail."
-    warn "  Get a token at: https://huggingface.co/settings/tokens"
+    warn "HF_TOKEN not set in .env. Leaderboard submission will not work."
+    warn "  Add it to .env or re-run: bash setup.sh"
 fi
-ok "API keys set"
+ok "API keys loaded from .env"
 
 # 3. Start vLLM (in its own tmux session)
 log "Starting vLLM..."

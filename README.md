@@ -264,16 +264,18 @@ You should see `Agent: ollama | vLLM: off (not needed) | NAT: OK`. The agent run
 | **HuggingFace** | [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) | GAIA dataset download and leaderboard submission |
 
 **Tavily (TAVILY_API_KEY):**
-1. Create a free account at [tavily.com](https://tavily.com/).
+1. Go to [tavily.com](https://tavily.com/) and sign in with Google (or use your university/org account).
 2. Your API key is on the dashboard after signing in. Copy it.
 
 **NVIDIA Build (NGC_API_KEY):**
 1. Go to [build.nvidia.com](https://build.nvidia.com/) and click **Login** (top right).
-2. Click **Login Help**, then **"I don't have an NVIDIA account"** to create one. You'll verify by email and phone.
-3. Once logged in, click your **profile icon** > **API Keys** > **Generate API Key**. Copy it.
+2. Create an NVIDIA account if you don't have one (verify by email and phone).
+3. Once logged in, go to [build.nvidia.com/settings/api-keys](https://build.nvidia.com/settings/api-keys) and click **Generate API Key**. Copy it.
+
+If you get stuck on phone verification, email help@build.nvidia.com with your registered email and a screenshot of the error.
 
 **HuggingFace (HF_TOKEN):**
-1. Create a free account at [huggingface.co](https://huggingface.co/).
+1. Go to [huggingface.co](https://huggingface.co/) and sign in (or create a free account).
 2. Go to [Settings > Access Tokens](https://huggingface.co/settings/tokens).
 3. Create a token with **Read** access. Copy it.
 

@@ -5,9 +5,9 @@
 # Installs all dependencies, downloads the model, and verifies the environment.
 # Safe to re-run (all steps are idempotent).
 #
-# Path A (GPU):    Linux with 8x H100 GPUs — vLLM + MiniMax M2.5
+# Path A (GPU):    Linux with 8x H100 GPUs, vLLM + MiniMax M2.5
 #                  Requires: 300 GB free disk, NVIDIA driver (nvidia-smi works)
-# Path B (Ollama): macOS or Linux, no GPU — Ollama + Qwen3.5 35B-A3B
+# Path B (Ollama): macOS or Linux, no GPU, Ollama + Qwen3.5 35B-A3B
 #                  Requires: 32+ GB RAM
 #
 # Usage:
@@ -16,11 +16,14 @@
 # ============================================================================
 set -uo pipefail
 
+# Resolve absolute path before tmux wrapper (tmux may start in a different cwd)
+SCRIPT_PATH="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+
 # ---- Auto-wrap in tmux to survive SSH disconnects ----
 if [ -z "${TMUX:-}" ] && command -v tmux &>/dev/null; then
     tmux kill-session -t setup 2>/dev/null || true
     echo "  Starting setup in tmux session 'setup' (survives SSH disconnects)..."
-    exec tmux new-session -s setup "bash \"$0\" $*; echo; echo 'Setup complete. Press Enter to close.'; read"
+    exec tmux new-session -s setup "bash \"$SCRIPT_PATH\" $*; echo; echo 'Setup complete. Press Enter to close.'; read"
 fi
 
 REPO_ROOT="$(cd "$(dirname "$0")" && pwd)"
@@ -32,6 +35,16 @@ ok()   { echo -e "${GREEN}[OK]${NC} $*"; }
 warn() { echo -e "${YELLOW}[WARN]${NC} $*"; }
 err()  { echo -e "${RED}[ERROR]${NC} $*"; }
 die()  { err "$*"; exit 1; }
+
+# Strip leading/trailing whitespace and surrounding quotes from a pasted value.
+clean_key() {
+    local val="$1"
+    val="${val#"${val%%[![:space:]]*}"}"   # trim leading whitespace
+    val="${val%"${val##*[![:space:]]}"}"   # trim trailing whitespace
+    val="${val#\"}" ; val="${val%\"}"       # strip surrounding double quotes
+    val="${val#\'}" ; val="${val%\'}"       # strip surrounding single quotes
+    echo "$val"
+}
 
 # ============================================================================
 # Detect setup path: GPU (vLLM + MiniMax M2.5) or Ollama (no GPU)
@@ -51,7 +64,7 @@ else
     echo "  NAT Agent Lab - Environment Setup (Path B: Ollama / no GPU)"
     echo "============================================================"
     echo "  Repo: $REPO_ROOT"
-    echo "  No GPU detected — using Ollama path (Qwen3.5, local inference)."
+    echo "  No GPU detected. Using Ollama path (Qwen3.5, local inference)."
     echo ""
 fi
 
@@ -76,10 +89,10 @@ else
         RAM_GB=$(( RAM_KB / 1024 / 1024 ))
     fi
     if [ "$RAM_GB" -ge 32 ]; then
-        ok "RAM: ${RAM_GB}GB — using qwen3.5:35b-a3b (~24 GB, best accuracy)"
+        ok "RAM: ${RAM_GB}GB, using qwen3.5:35b-a3b (~24 GB, best accuracy)"
         OLLAMA_MODEL="qwen3.5:35b-a3b"
     else
-        die "RAM: ${RAM_GB}GB — qwen3.5:35b-a3b requires 32+ GB RAM. Upgrade your machine or use the GPU path."
+        die "RAM: ${RAM_GB}GB. qwen3.5:35b-a3b requires 32+ GB RAM. Upgrade your machine or use the GPU path."
     fi
 fi
 
@@ -109,6 +122,9 @@ else
     uv venv --python 3.12 .venv 2>/dev/null || python3 -m venv .venv
 fi
 
+if [ ! -f ".venv/bin/activate" ]; then
+    die "Virtual environment not created. Check Python installation and disk space."
+fi
 source .venv/bin/activate
 ok "Python $(python3 --version) in .venv"
 
@@ -186,82 +202,134 @@ fi
 log "Step 5/8: Checking API keys..."
 
 if [ -f ".env" ]; then
-    set -a
-    source .env
-    set +a
-    ok ".env file found and loaded"
+    if (set -a; source .env; set +a) 2>/dev/null; then
+        set -a
+        source .env
+        set +a
+        # Clean values in case .env was hand-edited with extra quotes or spaces
+        [ -n "${TAVILY_API_KEY:-}" ] && TAVILY_API_KEY="$(clean_key "$TAVILY_API_KEY")"
+        [ -n "${NGC_API_KEY:-}" ]    && NGC_API_KEY="$(clean_key "$NGC_API_KEY")"
+        [ -n "${HF_TOKEN:-}" ]       && HF_TOKEN="$(clean_key "$HF_TOKEN")"
+        ok ".env file found and loaded"
+    else
+        warn ".env file has syntax errors. Ignoring it and prompting for keys."
+        warn "  (The broken .env will be overwritten with correct values.)"
+    fi
 fi
 
-NEEDS_KEYS=false
-
-if [ -z "${TAVILY_API_KEY:-}" ]; then
-    echo ""
-    echo "  Tavily API key is needed for internet search."
-    echo "  Get one free at: https://tavily.com/"
-    read -rp "  TAVILY_API_KEY: " TAVILY_API_KEY
-    [ -z "$TAVILY_API_KEY" ] && die "Tavily key is required."
-    NEEDS_KEYS=true
-else
-    ok "TAVILY_API_KEY set (${TAVILY_API_KEY:0:8}...)"
-fi
+while true; do
+    if [ -z "${TAVILY_API_KEY:-}" ]; then
+        echo ""
+        echo "  Tavily API key is needed for the internet search tool."
+        echo "  1. Go to https://tavily.com/ and sign in with Google (or use your university/org account)."
+        echo "  2. Your API key is on the dashboard after signing in. Copy it."
+        read -rp "  TAVILY_API_KEY: " TAVILY_API_KEY
+        TAVILY_API_KEY="$(clean_key "$TAVILY_API_KEY")"
+        [ -z "$TAVILY_API_KEY" ] && die "Tavily key is required."
+    fi
+    if [[ "$TAVILY_API_KEY" =~ ^tvly- ]]; then
+        break
+    fi
+    err "TAVILY_API_KEY must start with 'tvly-'. You entered: ${TAVILY_API_KEY:0:20}..."
+    echo "  Make sure you copied the API key from your Tavily dashboard, not something else."
+    TAVILY_API_KEY=""
+done
+ok "TAVILY_API_KEY set (${TAVILY_API_KEY:0:12}...)"
 
 if [ "$MODE" = gpu ]; then
-    if [ -z "${NGC_API_KEY:-}" ]; then
-        echo ""
-        echo "  NVIDIA Build API key is needed for vision models."
-        echo "  Get one at: https://build.nvidia.com/"
-        read -rp "  NGC_API_KEY: " NGC_API_KEY
-        [ -z "$NGC_API_KEY" ] && die "NGC key is required."
-        NEEDS_KEYS=true
-    else
-        ok "NGC_API_KEY set (${NGC_API_KEY:0:8}...)"
-    fi
+    while true; do
+        if [ -z "${NGC_API_KEY:-}" ]; then
+            echo ""
+            echo "  NVIDIA Build API key is needed for vision and audio tools."
+            echo "  1. Go to https://build.nvidia.com/ and click Login (top right)."
+            echo "  2. Create an NVIDIA account if you don't have one (verify by email and phone)."
+            echo "  3. Once logged in, go to https://build.nvidia.com/settings/api-keys"
+            echo "     and click Generate API Key. Copy it."
+            read -rp "  NGC_API_KEY: " NGC_API_KEY
+            NGC_API_KEY="$(clean_key "$NGC_API_KEY")"
+            [ -z "$NGC_API_KEY" ] && die "NGC key is required."
+        fi
+        if [[ "$NGC_API_KEY" =~ ^nvapi- ]]; then
+            break
+        fi
+        err "NGC_API_KEY must start with 'nvapi-'. You entered: ${NGC_API_KEY:0:20}..."
+        echo "  Make sure you copied the API Key from https://build.nvidia.com/settings/api-keys"
+        NGC_API_KEY=""
+    done
+    ok "NGC_API_KEY set (${NGC_API_KEY:0:12}...)"
 else
     # Ollama path: NGC is optional (only needed for describe_image / transcribe_audio)
     if [ -z "${NGC_API_KEY:-}" ]; then
         echo ""
-        echo "  NVIDIA Build API key is optional for Ollama path."
+        echo "  NVIDIA Build API key is optional for the Ollama path."
         echo "  It enables vision (describe_image) and audio (transcribe_audio) tools."
-        echo "  Get one free at: https://build.nvidia.com/ — press Enter to skip."
+        echo "  1. Go to https://build.nvidia.com/ and click Login (top right)."
+        echo "  2. Create an NVIDIA account if needed, then: profile icon > API Keys > Generate."
+        echo "  Press Enter to skip if you don't need vision/audio tools."
         read -rp "  NGC_API_KEY (optional): " NGC_API_KEY
+        NGC_API_KEY="$(clean_key "$NGC_API_KEY")"
         if [ -n "$NGC_API_KEY" ]; then
-            NEEDS_KEYS=true
-            ok "NGC_API_KEY set"
+            if [[ ! "$NGC_API_KEY" =~ ^nvapi- ]]; then
+                err "NGC_API_KEY must start with 'nvapi-'. You entered: ${NGC_API_KEY:0:20}..."
+                echo "  Ignoring invalid key. describe_image and transcribe_audio will not work."
+                NGC_API_KEY=""
+            else
+                ok "NGC_API_KEY set (${NGC_API_KEY:0:12}...)"
+            fi
         else
-            warn "NGC_API_KEY skipped — describe_image and transcribe_audio will not work"
+            warn "NGC_API_KEY skipped. describe_image and transcribe_audio will not work."
         fi
     else
-        ok "NGC_API_KEY set (${NGC_API_KEY:0:8}...)"
+        if [[ ! "$NGC_API_KEY" =~ ^nvapi- ]]; then
+            warn "NGC_API_KEY in .env doesn't start with 'nvapi-'. Vision/audio tools may not work."
+        fi
+        ok "NGC_API_KEY set (${NGC_API_KEY:0:12}...)"
     fi
 fi
 
-if [ -z "${HF_TOKEN:-}" ]; then
-    echo ""
-    echo "  HuggingFace token is needed for GAIA dataset and leaderboard submission."
-    echo "  Get one at: https://huggingface.co/settings/tokens"
-    read -rp "  HF_TOKEN: " HF_TOKEN
-    [ -z "$HF_TOKEN" ] && die "HuggingFace token is required."
-    NEEDS_KEYS=true
-else
-    ok "HF_TOKEN set (${HF_TOKEN:0:8}...)"
-fi
+while true; do
+    if [ -z "${HF_TOKEN:-}" ]; then
+        echo ""
+        echo "  HuggingFace token is needed for the GAIA dataset and leaderboard submission."
+        echo "  1. Go to https://huggingface.co/ and sign in (or create a free account)."
+        echo "  2. Go to Settings > Access Tokens: https://huggingface.co/settings/tokens"
+        echo "  3. Create a token with Read access. Copy it."
+        read -rp "  HF_TOKEN: " HF_TOKEN
+        HF_TOKEN="$(clean_key "$HF_TOKEN")"
+        [ -z "$HF_TOKEN" ] && die "HuggingFace token is required."
+    fi
+    if [[ "$HF_TOKEN" =~ ^hf_ ]]; then
+        break
+    fi
+    err "HF_TOKEN must start with 'hf_'. You entered: ${HF_TOKEN:0:20}..."
+    echo "  Make sure you copied the token from https://huggingface.co/settings/tokens"
+    HF_TOKEN=""
+done
+ok "HF_TOKEN set (${HF_TOKEN:0:8}...)"
 
-if $NEEDS_KEYS; then
-    # Write each key individually (preserves other entries like HF_HOME).
-    # Uses Python for sed-free portability (macOS sed -i is incompatible with GNU).
-    python3 -c "
+# Always write .env so keys survive across SSH sessions.
+# Pass keys via env vars (not string interpolation) to avoid issues with special chars.
+export TAVILY_API_KEY HF_TOKEN
+[ -n "${NGC_API_KEY:-}" ] && export NGC_API_KEY
+export _SETUP_HF_HOME="$REPO_ROOT/.cache/huggingface"
+
+python3 -c "
 import os, re
-keys = {
-    'TAVILY_API_KEY': '''${TAVILY_API_KEY}''',
-    'NGC_API_KEY': '''${NGC_API_KEY:-}''',
-    'HF_TOKEN': '''${HF_TOKEN}''',
+
+keys_to_write = {
+    'TAVILY_API_KEY': os.environ.get('TAVILY_API_KEY', ''),
+    'NGC_API_KEY': os.environ.get('NGC_API_KEY', ''),
+    'HF_TOKEN': os.environ.get('HF_TOKEN', ''),
+    'HF_HOME': os.environ.get('_SETUP_HF_HOME', ''),
 }
+
 env_path = '.env'
 lines = open(env_path).readlines() if os.path.exists(env_path) else []
-for key, val in keys.items():
+
+for key, val in keys_to_write.items():
     if not val:
         continue
-    pattern = re.compile(r'^(export\s+)?' + re.escape(key) + r'=.*$')
+    pattern = re.compile(r'^(export\s+)?' + re.escape(key) + r'=')
     found = False
     for i, line in enumerate(lines):
         if pattern.match(line.strip()):
@@ -270,14 +338,17 @@ for key, val in keys.items():
             break
     if not found:
         lines.append(f\"{key}='{val}'\n\")
+
 with open(env_path, 'w') as f:
     f.writelines(lines)
 "
-    ok "Keys saved to .env"
-fi
+unset _SETUP_HF_HOME
 
-export TAVILY_API_KEY HF_TOKEN
-[ -n "${NGC_API_KEY:-}" ] && export NGC_API_KEY
+if [ -f ".env" ]; then
+    ok "Keys saved to .env"
+else
+    die "Failed to write .env. Check file permissions in $REPO_ROOT"
+fi
 
 # ============================================================================
 # Step 6: Model setup
@@ -374,7 +445,7 @@ import re, sys
 path = '$OLLAMA_CONFIG'
 model = '$OLLAMA_MODEL'
 text = open(path).read()
-updated = re.sub(r'(model_name:\s*)qwen3\.5:\w+', r'\g<1>' + model, text)
+updated = re.sub(r'(model_name:\s*)qwen3\.5:[\w-]+', r'\g<1>' + model, text)
 if updated != text:
     open(path, 'w').write(updated)
     print('  Updated model_name to ' + model + ' in ' + path)
@@ -427,6 +498,20 @@ else
     ollama list 2>/dev/null | grep -q "^${OLLAMA_MODEL}" && ok "Model ${OLLAMA_MODEL} available" || { err "Model ${OLLAMA_MODEL} not found in ollama list"; ERRORS=$((ERRORS+1)); }
 fi
 
+if [ -f ".env" ]; then
+    # Verify .env has the required keys (not just that the file exists)
+    ENV_KEYS=$(grep -cE '^(TAVILY_API_KEY|NGC_API_KEY|HF_TOKEN)=' .env 2>/dev/null || echo 0)
+    if [ "$ENV_KEYS" -ge 2 ]; then
+        ok ".env file valid ($ENV_KEYS keys)"
+    else
+        err ".env file exists but only has $ENV_KEYS keys. Re-run setup to fix."
+        ERRORS=$((ERRORS+1))
+    fi
+else
+    err ".env file missing. API keys were not saved."
+    ERRORS=$((ERRORS+1))
+fi
+
 [ -f "gaia_questions.json" ] && ok "GAIA questions file present" || warn "gaia_questions.json not found (run prep_gaia_data.py)"
 [ -d "gaia_files" ] && ok "GAIA files directory present" || warn "gaia_files/ not found (run prep_gaia_data.py)"
 
@@ -453,7 +538,7 @@ else
     echo "    1. ./ask                                 # start chatting"
     echo "       switch ollama                         # load the Ollama agent"
     echo ""
-    echo "  The Ollama agent runs locally — no GPU or vLLM needed."
+    echo "  The Ollama agent runs locally, no GPU or vLLM needed."
     echo "  Model: ${OLLAMA_MODEL} | Endpoint: http://localhost:11434"
     if [ -z "${NGC_API_KEY:-}" ]; then
         echo ""
