@@ -920,17 +920,17 @@ def _parallel_health_checks(config_path):
 def print_status_line(agent_name, verbose=True, config_path=None, nat_loading=False):
     vllm, nat, phoenix = _parallel_health_checks(config_path)
     v = "ON" if verbose else "OFF"
-    nat_display = "loading..." if nat_loading and nat != "OK" else nat
+    nat_display = "loading..." if nat_loading else nat
     print()
     print(f"  Agent: {agent_name} | vLLM: {vllm} | NAT: {nat_display} | "
           f"Phoenix: {phoenix} | Verbose: {v}")
     print()
     _print_commands()
-    if nat == "OK":
-        print("  Ready. Type a question, or 'help' for commands.")
-    elif nat_loading:
+    if nat_loading:
         print("  NAT is starting. You will see \"NAT is ready.\" when it's done.")
         print()
+    elif nat == "OK":
+        print("  Ready. Type a question, or 'help' for commands.")
     else:
         print("  Setup incomplete. Type 'status' to diagnose.")
 
