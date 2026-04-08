@@ -612,8 +612,8 @@ _AGENT_DESIGNS = {
     ),
     "ollama": (
         "I'm the ollama agent: ultrafast architecture running locally via Ollama.\n"
-        "  Model: Qwen3.5 27B (~17 GB). Runs on CPU (Apple Silicon), no GPU or API keys needed.\n"
-        "  Needs 32+ GB RAM. Latest Qwen 3.5 architecture for strong tool-calling.\n"
+        "  Model: Qwen3.5 35B-A3B (~24 GB). Runs on CPU (Apple Silicon), no GPU or API keys needed.\n"
+        "  Needs 32+ GB RAM. MoE architecture (35B total / 3B active) for fast, strong tool-calling.\n"
         "  Config: ultrafast-ollama-agent/gaia_agent_ultrafast_ollama.yml"
     ),
 }
@@ -688,7 +688,7 @@ _AGENT_BACKEND_LABELS = {
     "single": "simplest: 1 agent, all tools, local GPU",
     "multi": "3 specialist sub-agents + orchestrator, local GPU",
     "ultrafast": "fastest: prompt-driven routing, local GPU",
-    "ollama": "local Ollama: Qwen3.5 27B, no GPU/API needed",
+    "ollama": "local Ollama: Qwen3.5 35B-A3B, no GPU/API needed",
 }
 
 
@@ -876,6 +876,8 @@ def _print_help():
     print(f"    {'level dev <L>':{COL}}List Level L dev questions")
     print(f"    {'level dev <L>, <N>':{COL}}Run dev question with answer checking")
     print(f"    {'benchmark [agent]':{COL}}Run 20-question scored leaderboard")
+    print(f"    {'':24s}  View scores: https://huggingface.co/spaces/agents-course/Students_Leaderboard")
+    print(f"    {'':24s}  Per-question results: <agent>/runs/latest/gaia_results.json")
     print()
     print(f"  {BOLD}Agent management:{RESET}")
     print(f"    {'switch':{COL}}Interactive agent picker")
@@ -883,7 +885,7 @@ def _print_help():
     print(f"    {'':24s}  single          - single-agent pipeline")
     print(f"    {'':24s}  multi           - multi-agent pipeline")
     print(f"    {'':24s}  ultrafast       - fast, requires local vLLM")
-    print(f"    {'':24s}  ollama          - local Ollama (Qwen3.5 27B, no GPU/API needed)")
+    print(f"    {'':24s}  ollama          - local Ollama (Qwen3.5 35B-A3B, no GPU/API needed)")
     print(f"    {'info':{COL}}Show current agent, model, and tools")
     print()
     print(f"  {BOLD}System:{RESET}")
@@ -915,16 +917,20 @@ def _parallel_health_checks(config_path):
         return vllm_fut.result(timeout=10), nat_fut.result(timeout=10), phoenix_fut.result(timeout=10)
 
 
-def print_status_line(agent_name, verbose=True, config_path=None):
+def print_status_line(agent_name, verbose=True, config_path=None, nat_loading=False):
     vllm, nat, phoenix = _parallel_health_checks(config_path)
     v = "ON" if verbose else "OFF"
+    nat_display = "loading..." if nat_loading and nat != "OK" else nat
     print()
-    print(f"  Agent: {agent_name} | vLLM: {vllm} | NAT: {nat} | "
+    print(f"  Agent: {agent_name} | vLLM: {vllm} | NAT: {nat_display} | "
           f"Phoenix: {phoenix} | Verbose: {v}")
     print()
     _print_commands()
     if nat == "OK":
         print("  Ready. Type a question, or 'help' for commands.")
+    elif nat_loading:
+        print("  NAT is starting. You will see \"NAT is ready.\" when it's done.")
+        print()
     else:
         print("  Setup incomplete. Type 'status' to diagnose.")
 
@@ -1244,7 +1250,7 @@ def cmd_benchmark(questions=None, arg=""):
         return
     if choice_lower == "ollama":
         print("  Starting benchmark (ollama), 20 questions from HF leaderboard...")
-        _run_benchmark(["-c", AGENTS["ollama"]])
+        _run_benchmark(["--ollama"])
         return
     if choice_lower == "all":
         _run_benchmark_all()
@@ -1283,7 +1289,7 @@ def cmd_benchmark(questions=None, arg=""):
         _run_benchmark([mode_map[pick]])
     elif pick == "ollama":
         print("  Starting benchmark (ollama), 20 questions from HF leaderboard...")
-        _run_benchmark(["-c", AGENTS["ollama"]])
+        _run_benchmark(["--ollama"])
     elif pick == "all":
         _run_benchmark_all()
     elif pick == "custom":
@@ -1453,16 +1459,24 @@ def main():
         result = start_nat(config_path, show_spinner=False)
         _nat_result[0] = result
         _nat_ready.set()
+        _nat_notified[0] = True
+        if result:
+            sys.stdout.write("\n  NAT is ready.\n")
+        elif check_service(NAT_HEALTH):
+            sys.stdout.write("\n  Using previously running NAT instance.\n")
+        else:
+            sys.stdout.write("\n  NAT failed to start. Use 'switch' to try again, or 'status' to diagnose.\n")
+        sys.stdout.flush()
 
     threading.Thread(target=_nat_start_bg, daemon=True).start()
 
     verbose = True
     conversation = []
     config_ctx = build_config_context(config_path)
-    print_status_line(agent_name, verbose, config_path)
+    print_status_line(agent_name, verbose, config_path, nat_loading=True)
     if agent_name == "ollama":
-        print("  Note: the first response will be slow (20-40s) while the model loads into RAM.")
-        print("  Subsequent responses will be faster once weights are cached.")
+        print("  Note: the first run will be slow (20-40s) while the model loads into RAM.")
+        print("  Subsequent runs will be faster once weights are cached.")
 
     while True:
         # Print NAT-ready notification before the next prompt (safe: not mid-input)
