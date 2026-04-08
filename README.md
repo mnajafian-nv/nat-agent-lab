@@ -155,11 +155,11 @@ The GPU agents (single, multi, ultrafast) share the full tool set: `internet_sea
 | **Single** | [`single-agent/gaia_agent.yml`](single-agent/gaia_agent.yml) | Flat `tool_calling_agent` with direct access to all tools | MiniMax M2.5 456B MoE (vLLM serving) | Simplest design. One LLM call per tool step, no routing overhead. |
 | **Multi** | [`multi-agent/gaia_agent_multi.yml`](multi-agent/gaia_agent_multi.yml) | Orchestrator dispatches to 3 specialist sub-agents (web, file, multimedia) | MiniMax M2.5 456B MoE (vLLM serving) | Extra LLM call for routing, but specialists get focused prompts and tools. |
 | **Ultrafast** | [`ultrafast-agent/gaia_agent_ultrafast.yml`](ultrafast-agent/gaia_agent_ultrafast.yml) | Flat agent with TYPE A/B/C/D routing baked into the system prompt | MiniMax M2.5 456B MoE (vLLM serving) | Same flat architecture as Single, but prompt-driven routing skips the orchestrator call. |
-| **Ollama Served** | [`ultrafast-ollama-agent/gaia_agent_ultrafast_ollama.yml`](ultrafast-ollama-agent/gaia_agent_ultrafast_ollama.yml) | Same design as Ultrafast, running locally via Ollama | Qwen3.5 35B-A3B (Ollama serving) | No GPU needed, no API keys for inference. Ollama can serve various models; default is a MoE model (35B total / 3B active), needs 32+ GB RAM. For 16 GB Macs, edit config to use `qwen3.5:9b`. |
+| **Ollama Ultrafast** | [`ultrafast-ollama-agent/gaia_agent_ultrafast_ollama.yml`](ultrafast-ollama-agent/gaia_agent_ultrafast_ollama.yml) | Same design as Ultrafast, running locally via Ollama | Qwen3.5 35B-A3B (Ollama serving) | No GPU needed, no API keys for inference. Default is a MoE model (35B total / 3B active), needs 32+ GB RAM. |
 
 Each agent is defined entirely by its YAML config. NAT supports additional architectures (`react_agent`, `router_agent`, `sequential_executor`, etc.). See step 6 for how to experiment.
 
-**Ollama notes:** Qwen3.5 35B-A3B needs ~24 GB disk and ~32 GB RAM. It is a MoE model (35B total / 3B active) from the latest Qwen 3.5 generation — fast inference with strong tool-calling. For 16 GB Macs, edit the config to use `qwen3.5:9b` (~6.6 GB) instead. Vision and audio tools (`describe_image`, `transcribe_audio`) still work because they call external APIs, not the local model. They do require an NGC_API_KEY. For best GAIA accuracy, use the GPU agents.
+**Ollama notes:** Qwen3.5 35B-A3B needs ~24 GB disk and ~32 GB RAM. It is a MoE model (35B total / 3B active) from the latest Qwen 3.5 generation — fast inference with strong tool-calling. Vision and audio tools (`describe_image`, `transcribe_audio`) still work because they call external APIs, not the local model. They do require an NGC_API_KEY. For best GAIA accuracy, use the GPU agents.
 
 ## Two Question Sets
 
@@ -229,7 +229,7 @@ You should see `Agent: ultrafast | vLLM: OK | NAT: OK | Phoenix: OK`. All agents
 
 **What you need:**
 - macOS (Apple Silicon M1/M2/M3/M4) or Linux. No GPU required.
-- **32 GB RAM recommended** (the default 35B-A3B model uses ~24 GB). 16 GB Macs: edit config to use `qwen3.5:9b` (~6.6 GB) instead.
+- **32 GB RAM required** (the default 35B-A3B model uses ~24 GB).
 - **2 API keys required**: [Tavily](https://tavily.com/) (search) and [HuggingFace](https://huggingface.co/settings/tokens) (dataset). [NVIDIA Build](https://build.nvidia.com/) is optional — only needed for vision and audio tools.
 - No Ollama pre-install needed — `setup.sh` installs it automatically.
 
@@ -247,7 +247,7 @@ Then at the prompt:
 switch ollama
 ```
 
-`setup.sh` auto-detects that you have no GPU and handles everything: installs Ollama if needed, selects the right model based on your RAM (35b-a3b for 32+ GB, 9b for 16 GB), pulls it, sets up the Python environment, and prompts for API keys.
+`setup.sh` auto-detects that you have no GPU and handles everything: installs Ollama if needed, pulls qwen3.5:35b-a3b (requires 32+ GB RAM), sets up the Python environment, and prompts for API keys.
 
 You should see `Agent: ollama | vLLM: off (not needed) | NAT: OK`. The agent runs locally. Only Tavily (web search) and HuggingFace (dataset) need API keys.
 
