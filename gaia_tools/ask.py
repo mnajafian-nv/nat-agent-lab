@@ -438,12 +438,16 @@ def normalize_for_comparison(text):
     return s.strip()
 
 
-def spinner_while(event, prefix="  Thinking"):
+def spinner_while(event, prefix="  Thinking", timeout=None):
     chars = ["|", "/", "-", "\\"]
     i = 0
     start = time.time()
     while not event.is_set():
         elapsed = time.time() - start
+        if timeout is not None and elapsed > timeout:
+            sys.stdout.write(f"\r{prefix} timed out ({elapsed:.0f}s)    \n")
+            sys.stdout.flush()
+            return False
         sys.stdout.write(f"\r{prefix} {chars[i % 4]} ({elapsed:.0f}s)")
         sys.stdout.flush()
         time.sleep(0.25)
@@ -451,6 +455,7 @@ def spinner_while(event, prefix="  Thinking"):
     elapsed = time.time() - start
     sys.stdout.write(f"\r{prefix} done ({elapsed:.1f}s)    \n")
     sys.stdout.flush()
+    return True
 
 
 def ask_with_spinner(messages, timeout=300):
@@ -926,13 +931,11 @@ def print_status_line(agent_name, verbose=True, config_path=None, nat_loading=Fa
           f"Phoenix: {phoenix} | Verbose: {v}")
     print()
     _print_commands()
-    if nat_loading:
-        print("  NAT is starting. You will see \"NAT is ready.\" when it's done.")
-        print()
-    elif nat == "OK":
-        print("  Ready. Type a question, or 'help' for commands.")
-    else:
-        print("  Setup incomplete. Type 'status' to diagnose.")
+    if not nat_loading:
+        if nat == "OK":
+            print("  Ready. Type a question, or 'help' for commands.")
+        else:
+            print("  Setup incomplete. Type 'status' to diagnose.")
 
 
 def print_status_compact(agent_name, verbose=True, config_path=None):
@@ -1436,7 +1439,7 @@ def main():
         agent_name = "ultrafast"
     elif ollama_available:
         agent_name = "ollama"
-        print("\n  vLLM not running — auto-selecting ollama agent (local, no GPU needed).")
+        print("\n  vLLM not running, auto-selecting ollama agent (local, no GPU needed).")
         print("  To use GPU agents instead, quit and run 'bash gaia_tools/start_services.sh'.")
     else:
         agent_name = "ultrafast"
@@ -1448,27 +1451,6 @@ def main():
     else:
         backend = "local Ollama"
     print(f"\n  Starting NeMo Agent Toolkit (NAT) with {agent_name} agent (default, {backend})...")
-    print(f"  Type 'help' or browse questions while NAT loads in the background.")
-
-    # Start NAT in background so the prompt appears immediately
-    _nat_ready = threading.Event()
-    _nat_result = [None]
-    _nat_notified = [False]
-
-    def _nat_start_bg():
-        result = start_nat(config_path, show_spinner=False)
-        _nat_result[0] = result
-        _nat_ready.set()
-        _nat_notified[0] = True
-        if result:
-            sys.stdout.write("\n  NAT is ready.\n")
-        elif check_service(NAT_HEALTH):
-            sys.stdout.write("\n  Using previously running NAT instance.\n")
-        else:
-            sys.stdout.write("\n  NAT failed to start. Use 'switch' to try again, or 'status' to diagnose.\n")
-        sys.stdout.flush()
-
-    threading.Thread(target=_nat_start_bg, daemon=True).start()
 
     verbose = True
     conversation = []
@@ -1478,16 +1460,33 @@ def main():
         print("  Note: the first run will be slow (20-40s) while the model loads into RAM.")
         print("  Subsequent runs will be faster once weights are cached.")
 
+    # Start NAT in background; spinner blocks until ready before showing the prompt
+    _nat_ready = threading.Event()
+    _nat_result = [None]
+    _nat_notified = [False]
+
+    def _nat_start_bg():
+        result = start_nat(config_path, show_spinner=False)
+        _nat_result[0] = result
+        _nat_ready.set()
+
+    threading.Thread(target=_nat_start_bg, daemon=True).start()
+
+    try:
+        started = spinner_while(_nat_ready, prefix="  Starting NAT", timeout=150)
+    except KeyboardInterrupt:
+        print("\n  Startup interrupted.")
+        started = _nat_ready.is_set()
+    _nat_notified[0] = True
+    if not started:
+        print("  NAT startup timed out. Use 'switch' to try again, or 'status' to diagnose.")
+    elif _nat_result[0] or check_service(NAT_HEALTH):
+        print("  Ready. Type a question, or 'help' for commands.")
+    else:
+        print("  NAT failed to start. Use 'switch' to try again, or 'status' to diagnose.")
+    print()
+
     while True:
-        # Print NAT-ready notification before the next prompt (safe: not mid-input)
-        if _nat_ready.is_set() and not _nat_notified[0]:
-            _nat_notified[0] = True
-            if _nat_result[0]:
-                print("  NAT is ready.")
-            elif check_service(NAT_HEALTH):
-                print("  Using previously running NAT instance.")
-            else:
-                print("  NAT failed to start. Use 'switch' to try again, or 'status' to diagnose.")
 
         turn = len(conversation) // 2
         prompt_str = f"ask [{turn}]> " if turn > 0 else "ask> "
