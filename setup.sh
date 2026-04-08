@@ -8,7 +8,7 @@
 # Path A (GPU):    Linux with 8x H100 GPUs — vLLM + MiniMax M2.5
 #                  Requires: 300 GB free disk, NVIDIA driver (nvidia-smi works)
 # Path B (Ollama): macOS or Linux, no GPU — Ollama + Qwen3.5 35B-A3B
-#                  Requires: 32+ GB RAM (16 GB Macs use qwen3.5:9b)
+#                  Requires: 32+ GB RAM
 #
 # Usage:
 #   cd <repo-root>
@@ -78,12 +78,8 @@ else
     if [ "$RAM_GB" -ge 32 ]; then
         ok "RAM: ${RAM_GB}GB — using qwen3.5:35b-a3b (~24 GB, best accuracy)"
         OLLAMA_MODEL="qwen3.5:35b-a3b"
-    elif [ "$RAM_GB" -ge 16 ]; then
-        warn "RAM: ${RAM_GB}GB — using qwen3.5:9b (~6.6 GB). For 35B-A3B, upgrade to 32+ GB RAM."
-        OLLAMA_MODEL="qwen3.5:9b"
     else
-        warn "RAM: ${RAM_GB}GB — using qwen3.5:9b (~6.6 GB, 16 GB recommended)"
-        OLLAMA_MODEL="qwen3.5:9b"
+        die "RAM: ${RAM_GB}GB — qwen3.5:35b-a3b requires 32+ GB RAM. Upgrade your machine or use the GPU path."
     fi
 fi
 

@@ -10,7 +10,7 @@
 #
 # Model: Qwen3.5 35B-A3B is a MoE model (35B total / 3B active) from the latest
 # Qwen 3.5 generation (~24 GB, 256K context). Needs ~32 GB RAM; runs well on
-# 32+ GB Macs. For 16 GB Macs, use qwen3.5:9b (~6.6 GB) instead.
+# 32+ GB Macs.
 #
 # Trade-off vs cloud agents:
 #   + Completely free, no rate limits, no API keys for inference
