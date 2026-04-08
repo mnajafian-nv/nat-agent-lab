@@ -1,21 +1,23 @@
 # NAT Agent Lab
 
-LLM agents can search the web, execute code, read files, and reason across multiple steps, but getting them to do this reliably is an open engineering problem. This lab teaches **eval-driven agent development**: build an agent, benchmark it on real questions, inspect traces to find where it fails, improve the config, and measure again.
+LLM agents can search the web, run code, read files, and chain multi-step reasoning together, but getting them to do this *reliably* is an unsolved problem. When an agent picks the wrong tool, hallucinates a search query, or formats its answer incorrectly, the whole chain falls apart. Nobody has figured out how to make this work perfectly, and the techniques that do work are changing fast.
 
-You will work with three components:
+In this lab you'll get hands-on with the problem. You'll run agents against real questions, watch them fail in interesting ways through traces, change their configs, and measure whether your changes actually helped. By the end of the session you'll have a working intuition for *why* agents break and *how* to fix them.
 
-- **[NAT](https://github.com/NVIDIA/NeMo-Agent-Toolkit)** (NeMo Agent Toolkit): NVIDIA's open-source library for connecting and optimizing teams of AI agents. You define an agent entirely in YAML (agent type, system prompt, tools, model) and NAT handles orchestration, tool execution, and LLM calls.
-- **[GAIA](https://arxiv.org/abs/2311.12983)**: a benchmark of real-world questions that require multi-step reasoning and tool use. Answers are exact-match scored, so agent output formatting matters. The repo includes the GAIA validation set (Levels 1-3) with expected answers for testing and iteration.
-- **[Phoenix](https://docs.arize.com/phoenix)**: an OpenTelemetry-based tracing UI. Every LLM call, tool invocation, and routing decision is captured as a span tree you can inspect after each run.
+**You'll work with three tools:**
 
-**By the end of this lab you will know how to:**
+- **[NAT](https://github.com/NVIDIA/NeMo-Agent-Toolkit)** (NeMo Agent Toolkit): NVIDIA's open-source agent framework. You define an agent entirely in YAML (model, tools, system prompt, architecture) and NAT handles orchestration, tool execution, and LLM calls. No Python glue code needed.
+- **[GAIA](https://arxiv.org/abs/2311.12983)**: a benchmark of real-world questions that require multi-step reasoning and tool use. These aren't toy problems. They involve reading spreadsheets, analyzing images, searching the web, running calculations, and combining it all into a precise answer. The repo includes a test set (for benchmarking) and a dev set (with expected answers, for tuning).
+- **[Phoenix](https://docs.arize.com/phoenix)**: a tracing UI built on OpenTelemetry. Every LLM call, tool invocation, and routing decision shows up as a span tree you can click through. When something goes wrong, you can see exactly what the agent did and where it broke.
 
-- **Diagnose agent behavior** through traces: see every tool call, LLM prompt, and routing decision in Phoenix
-- **Compare four agent topologies** on the same benchmark and understand why different routing strategies produce different scores (see [Agent Architectures](#agent-architectures))
-- **Engineer better agents** by tuning system prompts, tool selection, and agent type in a single YAML config
-- **Measure what matters**: submit to a [public leaderboard](https://huggingface.co/spaces/agents-course/Students_Leaderboard), iterate on your config, and track improvement
+**What you'll learn:**
 
-The repo includes four agents that score 85-90% on the leaderboard. They are starting points, not finished products. Study their configs, read their traces, find where they fail, and build something better.
+- **How agents actually work under the hood.** Not the theory, but the real execution: which tools get called, what the LLM sees at each step, how routing decisions play out.
+- **Why architecture matters.** You'll run the same question through different agent designs and see in traces how a flat agent, a multi-agent orchestrator, and prompt-driven routing each handle it differently.
+- **How to debug and improve agents.** Read traces, spot wasted tool calls or bad formatting, fix them with targeted prompt edits.
+- **How to measure what you've built.** Your agents submit to a [public leaderboard](https://huggingface.co/spaces/agents-course/Students_Leaderboard) so you can see exactly where you stand.
+
+The repo ships with four agents that score 85-90% on the leaderboard. They're good but not perfect. Study their configs, read their traces, find where they fail, and build something better.
 
 ## Quick Start
 
@@ -26,159 +28,159 @@ bash setup.sh          # ~20 min; prompts for API keys, downloads model
 ./ask                  # start chatting
 ```
 
-Complete this **before class**. Setup takes 20-30 minutes (model download, dependencies, API keys) and cannot be done during a 40-minute session. See [Setup](#setup) for Path A (GPU) vs. Path B (cloud-only) details.
+**Do this before class.** Setup takes 20-30 minutes (model download, dependencies, API keys) and can't be done in a 40-minute session. See [Setup](#setup) for details. There's a [GPU path](#path-a-gpu-instance-all-agents) and an [Ollama path](#path-b-local-ollama-no-gpu) if you don't have GPUs.
 
-You should see a status line like `Agent: ultrafast | vLLM: OK | NAT: OK | Phoenix: OK`. If any service shows a problem, type `status` for diagnostics. Ask a test question ("What is 2+2?") to confirm the agent responds. You are ready for class.
+You should see a status line like `Agent: ultrafast | vLLM: OK | NAT: OK | Phoenix: OK`. If anything looks wrong, type `status` for diagnostics. Try asking "What is 2+2?" to confirm the agent responds. You're ready for class.
 
 ## What to Try
 
-Once you see the `ask>` prompt, try these in order:
+Once you see the `ask>` prompt, work through these steps in order.
 
-**1. Ask a question**
+### 1. Ask a question
 
 ```
 ask> What is the tallest building in San Francisco?
 ```
 
-The agent searches the web, reasons over the result, and answers. Type a follow-up: the agent remembers context. The prompt shows your turn count (`ask [1]>` after the first exchange, `ask [2]>` after the second, etc.).
+The agent searches the web, reasons over the result, and answers. Type a follow-up and the agent remembers context. The prompt shows your turn count (`ask [1]>` after the first exchange, `ask [2]>` after the second, etc.).
 
-**2. Run a GAIA validation question**
+### 2. Run a GAIA dev question
 
 ```
-ask [1]> level 1, 1
+ask [1]> level dev 1, 1
 ```
 
-This runs the 1st question from GAIA Level 1. The agent works through it with tool calls, then the expected answer is shown so you can compare. Notice the timing: `./ask` prints how long the agent took. After it finishes, you can ask "why did you use that tool?" or "explain your reasoning" since the Q&A is seeded into memory.
+This runs the first question from GAIA Level 1 (dev set). The agent works through it with tool calls, and then the expected answer is shown so you can compare. Notice the timing: `./ask` prints how long the agent took.
 
-Type `level 1` to see all Level 1 questions. Type `level` to see a summary of all levels.
+After it finishes, you can ask follow-ups like "why did you use that tool?" or "explain your reasoning" since the Q&A is already in memory.
 
-**3. Open Phoenix (traces)**
+Some useful commands:
+- `level dev 1` - list all Level 1 dev questions (with answers for checking)
+- `level 1` - list Level 1 test questions (no answers, for benchmarking)
+- `level` - summary of all levels
 
-Open Phoenix **before** running agent comparisons so you can see traces as they come in. If Phoenix shows `off` in the status line, typing `tracing` starts it automatically.
+### 3. Open Phoenix (traces)
+
+Start Phoenix **before** running agent comparisons so traces are captured.
 
 ```
 ask [1]> tracing
 ```
 
-This opens Phoenix in your browser. If you are on a remote machine (Brev, GCP), forward port 6006 first from a **separate terminal on your laptop**:
+If you're on a remote machine (Brev, GCP), forward port 6006 first from a **separate terminal on your laptop**:
 
 ```bash
 ssh -L 6006:localhost:6006 <your-ssh-host>
 ```
 
-Then open [http://localhost:6006](http://localhost:6006). Keep Phoenix open in a browser tab. Phoenix has been collecting traces since setup, so your runs from steps 1 and 2 are already there. If Phoenix is down, agents still work normally (you just won't see the traces).
+Then open [http://localhost:6006](http://localhost:6006) and keep it open in a tab. Your runs from steps 1 and 2 are already there. Phoenix is optional. Agents work fine without it, you just won't see the traces.
 
-**4. Run all 4 agents on the same question and compare**
+### 4. Compare agents on the same question
 
-*(Path B users: you only have one agent (ultrafast-nogpu) and already ran it in step 2. Skip to step 5.)*
+Pick a dev question so you have an expected answer to judge against. `level dev 1, 1` is a good choice because it needs multiple tool calls and computation, which is where architecture differences show up.
 
-Pick a GAIA validation question (not a freeform one) so you have an expected answer to judge correctness, not just fluency. `level 1, 1` is a good choice: it requires multiple tool calls and computation, which is where architecture differences show up. Run it with each agent, note the answer, the time, and which tools were called. Switch clears memory so each comparison is fair.
-
-You already ran `level 1, 1` on the default agent in step 2, so that trace is in Phoenix. Now run the same question on the other 3 agents.
+You already have a trace for the default agent (ultrafast) from step 2. Now run the same question on the other two:
 
 ```
 ask [1]> switch single
-ask> level 1, 1
+ask> level dev 1, 1
 ask [1]> switch multi
-ask> level 1, 1
-ask [1]> switch ultrafast-nogpu
-ask> level 1, 1
+ask> level dev 1, 1
 ```
 
-After each run, switch to your Phoenix tab and refresh. You will see a new trace for each agent. Click into a trace to see the full agent loop: system prompt, tool calls dispatched, intermediate results, and the final answer. Compare latencies per span to find where time is spent (LLM inference vs. tool execution vs. network).
+After each run, refresh Phoenix. Click into a trace to see the full agent loop: system prompt, tool calls, intermediate results, final answer. Compare latencies per span to see where time is spent.
 
-What to look for in each comparison:
+| Agent | What to look for |
+|-------|-----------------|
+| **Ultrafast** *(default)* | Your baseline. How does the system prompt classify the question before any tool call? |
+| **Single** | No routing. Does it call tools that Ultrafast would have skipped? More or fewer LLM round-trips? |
+| **Multi** | Extra LLM call for the orchestrator. Is the routing accurate? Is the specialist's focused context worth the latency? |
 
-| Agent | What to compare in the traces |
-|-------|-------------------------------|
-| **Ultrafast** *(default)* | Your baseline. Look at how the system prompt classifies the question before any tool call. |
-| **Single** | No routing step. Does it call tools that Ultrafast's routing would have skipped? More or fewer LLM round-trips? |
-| **Multi** | Extra LLM call for orchestrator routing. Is the routing accurate? Is the specialist's focused context worth the added latency? |
-| **Ultrafast-nogpu** | Same prompt as Ultrafast, but cloud LLM. Compare network latency vs. local GPU, and answer quality across different model weights. *(This step is optional; the NGC_API_KEY is still needed for vision/audio tools.)* |
+**Bonus:** try a simple factual question like "What is the capital of France?" (zero tools needed). All agents should answer instantly. If Multi is noticeably slower, that's the cost of orchestrator overhead on a question that didn't need routing.
 
-**Bonus (if time permits):** run the same 4-agent comparison on a simple factual question like "What is the capital of France?" (zero tools needed, pure LLM knowledge). All 4 agents should answer instantly and correctly. If Multi is noticeably slower, that is the cost of orchestrator overhead on a question that didn't need routing.
+The takeaway: the best architecture depends on the task. Flat agents are faster on simple questions; routing pays off on complex multi-tool questions. Traces make this measurable.
 
-The lesson: the best agent architecture depends on the task distribution. Flat agents have lower overhead on simple questions; routing (whether via an orchestrator LLM call or prompt-driven classification) pays off on complex, multi-tool questions. Traces make this tradeoff measurable.
-
-**5. Run the benchmark and establish a baseline score**
-
-Type `benchmark` and pick the agent you want to score:
+### 5. Run the benchmark
 
 ```
 ask [1]> benchmark
 ```
 
-This runs 20 scored questions (~15 min), submits your answers, and your team appears on the [public leaderboard](https://huggingface.co/spaces/agents-course/Students_Leaderboard) within seconds. It will prompt for your org and team name, and the agent suffix is added automatically, so the leaderboard entry follows the format `NAT-<org name>-<team name>-<agent name>` (e.g., `NAT-UCB-TeamAlpha-Ultrafast`). While the benchmark runs, go back to Phoenix and dig into the traces from step 4. This is your baseline score to beat in step 6.
+Pick an agent and run 20 scored questions (~15 min). Your answers are submitted and your team appears on the [public leaderboard](https://huggingface.co/spaces/agents-course/Students_Leaderboard) within seconds. You'll be prompted for your org and team name. The leaderboard entry follows the format `NAT-<org>-<team>-<agent>` (e.g., `NAT-UCB-TeamAlpha-Ultrafast`).
 
-**6. Build your own agent and compete**
+While the benchmark runs, go back to Phoenix and dig into the traces from step 4. This score is your baseline to beat in step 6.
 
-The four included agents are baselines. Open their YAML configs, read the system prompts, and look at the traces to see where they fail. Then improve on them.
+### 6. Build your own agent
 
-In a terminal (not inside `./ask`):
+The built-in agents are baselines. Open their YAML configs, read the system prompts, look at traces to see where they fail, then improve on them.
 
 ```bash
 mkdir my-agent
-# Path A (GPU): start from the ultrafast config
 cp ultrafast-agent/gaia_agent_ultrafast.yml my-agent/config.yml
-# Path B (no GPU): start from the ultrafast-nogpu config
-cp ultrafast-nogpu-agent/gaia_agent_ultrafast_nogpu.yml my-agent/config.yml
-# Then edit config.yml: refine the system prompt, add/remove tools, change the agent type
+# edit config.yml: refine the system prompt, add/remove tools, change the agent type
 ```
 
-Then load it inside `./ask`:
+Load it in `./ask`:
 
 ```
 ask> switch my-agent/config.yml
 ```
 
-**What to optimize** (one variable at a time, measure before and after with traces):
+**What to optimize** (change one variable at a time, measure before and after):
 
-- **Reduce unnecessary tool calls.** Look at traces: is the agent calling `internet_search` when the answer is in the question? Add explicit instructions to the system prompt about when to use each tool and when not to. Every skipped tool call saves one LLM round-trip.
-- **Remove tools the agent never uses.** Fewer tools in the YAML means a shorter tool schema in the system prompt, which means fewer input tokens per LLM call and faster inference. Check traces to see which tools are actually invoked.
-- **Add prompt-driven routing.** The ultrafast agent classifies questions into TYPE A/B/C/D categories in the system prompt before making any tool call. This avoids wasted tool calls on the wrong path. Read its config to see how, and adapt the categories for your use case.
-- **Change the agent type.** `tool_calling_agent` uses the LLM's native function-calling format. `react_agent` uses ReAct-style Thought/Action/Observation text prompting. These require different system prompts, so don't just swap the `_type` field. See working examples of both in the [NAT GitHub examples](https://github.com/NVIDIA/NeMo-Agent-Toolkit/tree/main/examples). Copy a working `react_agent` config, adapt the tools and prompt, then compare traces: which produces fewer hallucinated tool calls? Which is faster?
-- **Tune `temperature` and `seed`.** Lower temperature (0.0-0.1) makes tool selection more deterministic. Setting `seed` improves run-to-run reproducibility (local vLLM only). Measure variance by running the same `level` question 3 times.
-- **Tighten the answer format.** GAIA exact-match scoring is strict. If traces show the agent is correct but formatting is wrong (extra units, commas, explanation text around the answer), add explicit formatting rules to the system prompt.
-- **Reduce agent latency.** Total time = (number of LLM calls x per-call latency) + tool execution time. Traces show both. Target: reduce the number of LLM calls (routing, fewer retries) and reduce input tokens per call (shorter prompt, fewer tools).
+- **Cut unnecessary tool calls.** Check traces. Is the agent calling `internet_search` when the answer is in the question? Add explicit guidance to the system prompt about when to use each tool.
+- **Remove unused tools.** Fewer tools = shorter tool schema in the prompt = fewer input tokens per LLM call = faster inference. Check traces to see which tools actually get called.
+- **Add prompt-driven routing.** The ultrafast agent classifies questions into TYPE A/B/C/D categories in the system prompt before making any tool call. Read its config to see how.
+- **Try a different agent type.** `tool_calling_agent` uses the LLM's native function-calling format. `react_agent` uses ReAct-style Thought/Action/Observation prompting. These need different system prompts, so don't just swap the `_type` field. See [NAT examples](https://github.com/NVIDIA/NeMo-Agent-Toolkit/tree/main/examples) for working configs.
+- **Tune `temperature` and `seed`.** Lower temperature (0.0-0.1) makes tool selection more deterministic. Setting `seed` improves reproducibility (local vLLM only). Run the same question 3 times to measure variance.
+- **Tighten answer formatting.** GAIA exact-match scoring is strict. If the agent gets the right answer but wraps it in extra text, add formatting rules to the system prompt.
+- **Reduce latency.** Total time = (LLM calls x per-call latency) + tool time. Target fewer LLM calls and shorter prompts.
 
-**A note on swapping models:** each LLM has its own `max_tokens`, `temperature` range, chat template, and tool-calling format. If you change the `model` field in your YAML, you also need to adjust these parameters to match the new model's card. The built-in configs are tuned for MiniMax M2.5 (local) and Qwen 3.5-122B-A10B (cloud). See the [NAT examples](https://github.com/NVIDIA/NeMo-Agent-Toolkit/tree/main/examples) for working configs with other models (Llama, Nemotron, etc.).
+**On swapping models:** each LLM has its own `max_tokens`, `temperature` range, chat template, and tool-calling format. If you change `model` in your YAML, adjust these parameters to match. The built-in configs are tuned for MiniMax M2.5 (vLLM) and Qwen3.5 27B (Ollama). See [NAT examples](https://github.com/NVIDIA/NeMo-Agent-Toolkit/tree/main/examples) for other models.
 
-For deeper reading on system prompt design: [Anthropic's prompt engineering guide](https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/overview) covers techniques like role definition, few-shot examples, chain-of-thought, and output formatting that apply directly to agent system prompts.
+**The iteration loop:** edit YAML, run a `level dev` question, check traces, repeat. When you're confident, run `benchmark custom` to submit your score.
 
-**The iteration loop:** edit your YAML, run a `level` question to test, open traces to diagnose, repeat. When you're confident, run `benchmark custom` to submit your score and see it on the leaderboard.
+**Compete on three fronts:**
 
-**Compete on three dimensions:**
-
-1. **Accuracy** (leaderboard score). The built-in agents score 85-90%. Can your custom agent beat them? Every point matters: GAIA uses exact-match scoring, so formatting and precision count.
-2. **Speed** (total benchmark time). After each run, check `gaia_summary.json` for time per question and total elapsed time. A faster agent that maintains accuracy is a better agent. Compare your custom agent's timing against the built-ins.
-3. **Design** (trace quality). Open your traces and a built-in agent's traces side by side. Fewer tool calls, cleaner routing, shorter prompts: these are engineering improvements you can show and explain. Be ready to present what you changed and why it worked (or didn't).
+1. **Accuracy** (leaderboard score). The built-ins score 85-90%. Can you beat them?
+2. **Speed** (benchmark time). Check `gaia_summary.json` for per-question timing. A faster agent at the same accuracy is a better agent.
+3. **Design** (trace quality). Open your traces and a built-in's side by side. Fewer tool calls, cleaner routing, shorter prompts. Be ready to explain what you changed and why.
 
 ## Agent Architectures
 
-All four agents share the same tools: `internet_search`, `wiki_search`, `read_file`, `fetch_url`, `python_executor`, `describe_image`, `describe_image_alt`, `transcribe_audio`, `get_youtube_transcript`, `solve_chess`, `current_datetime`.
+The GPU agents (single, multi, ultrafast) share the full tool set: `internet_search`, `wiki_search`, `read_file`, `fetch_url`, `python_executor`, `describe_image`, `describe_image_alt`, `transcribe_audio`, `get_youtube_transcript`, `solve_chess`, `current_datetime`. The Ollama agent has most of these but skips `describe_image_alt` and `solve_chess` to keep context smaller.
 
 | Agent | Config | Architecture | LLM | Key difference |
 |-------|--------|-------------|-----|----------------|
-| **Single** | [`single-agent/gaia_agent.yml`](single-agent/gaia_agent.yml) | `tool_calling_agent`, flat: LLM has direct access to all tools | MiniMax M2.5 456B MoE (local vLLM) | Simplest. One LLM call per tool step. No routing overhead. |
-| **Multi** | [`multi-agent/gaia_agent_multi.yml`](multi-agent/gaia_agent_multi.yml) | `tool_calling_agent` orchestrator dispatches to 3 specialist sub-agents (web, file, multimedia), each with isolated tool subsets | MiniMax M2.5 456B MoE (local vLLM) | Extra LLM call for routing, but specialists have focused prompts and tools. |
-| **Ultrafast** | [`ultrafast-agent/gaia_agent_ultrafast.yml`](ultrafast-agent/gaia_agent_ultrafast.yml) | `tool_calling_agent`, flat: embedded TYPE A/B/C/D routing decision tree in the system prompt classifies questions before any tool call | MiniMax M2.5 456B MoE (local vLLM) | Same flat architecture as Single, but prompt-driven routing eliminates the orchestrator LLM call. |
-| **Ultrafast-nogpu** | [`ultrafast-nogpu-agent/gaia_agent_ultrafast_nogpu.yml`](ultrafast-nogpu-agent/gaia_agent_ultrafast_nogpu.yml) | Same as Ultrafast, but LLM inference runs on NVIDIA Build instead of local vLLM | Qwen 3.5-122B-A10B MoE (NVIDIA Build) | No GPU, no model download, no VRAM. Higher latency, 4096 max output tokens, uses API credits. |
+| **Single** | [`single-agent/gaia_agent.yml`](single-agent/gaia_agent.yml) | Flat `tool_calling_agent` with direct access to all tools | MiniMax M2.5 456B MoE (local vLLM) | Simplest design. One LLM call per tool step, no routing overhead. |
+| **Multi** | [`multi-agent/gaia_agent_multi.yml`](multi-agent/gaia_agent_multi.yml) | Orchestrator dispatches to 3 specialist sub-agents (web, file, multimedia) | MiniMax M2.5 456B MoE (local vLLM) | Extra LLM call for routing, but specialists get focused prompts and tools. |
+| **Ultrafast** | [`ultrafast-agent/gaia_agent_ultrafast.yml`](ultrafast-agent/gaia_agent_ultrafast.yml) | Flat agent with TYPE A/B/C/D routing baked into the system prompt | MiniMax M2.5 456B MoE (local vLLM) | Same flat architecture as Single, but prompt-driven routing skips the orchestrator call. |
+| **Ollama** | [`ultrafast-ollama-agent/gaia_agent_ultrafast_ollama.yml`](ultrafast-ollama-agent/gaia_agent_ultrafast_ollama.yml) | Same design as Ultrafast, running locally via Ollama | Qwen3.5 27B (CPU/Apple Silicon) | No GPU needed, no API keys for inference. Latest Qwen 3.5 architecture, needs 32+ GB RAM. For 16 GB Macs, edit config to use `qwen3.5:9b`. |
 
-Each agent is defined entirely by its YAML config: agent type, system prompt, tools, and model parameters. NAT supports additional architectures beyond `tool_calling_agent` (e.g., `react_agent`, `router_agent`, `sequential_executor`). See step 6 for how to experiment with them.
+Each agent is defined entirely by its YAML config. NAT supports additional architectures (`react_agent`, `router_agent`, `sequential_executor`, etc.). See step 6 for how to experiment.
 
-**Ultrafast-nogpu notes:** max output tokens are 4096 (vs 16384 local), so cloud responses may truncate on complex multi-step questions. `temperature: 0.0` is set, but `seed` is not supported by NVIDIA Build, and tool results (web, Wikipedia) change over time, so answers can vary between runs.
+**Ollama notes:** Qwen3.5 27B needs ~17 GB disk and ~22 GB RAM. It uses the latest Qwen 3.5 architecture which significantly improves reasoning and tool-calling over older generations. Needs 32+ GB RAM; for 16 GB Macs, edit the config to use `qwen3.5:9b` (~6.6 GB) instead. Vision and audio tools (`describe_image`, `transcribe_audio`) still work because they call external APIs, not the local model. They do require an NGC_API_KEY. For best GAIA accuracy, use the GPU agents.
+
+## Two Question Sets
+
+The repo includes two sets of GAIA questions:
+
+- **Test set** (`gaia_questions.json`, 301 questions) - no expected answers. Use `level` commands to browse and run these. The `benchmark` command scores against the HuggingFace leaderboard.
+- **Dev set** (`gaia_dev_questions.json`, 165 questions) - with expected answers. Use `level dev` commands. These are for tuning your agent: run a question, see if the answer matches, check the trace, iterate.
+
+Use the dev set to improve your agent. Use the test set (via `benchmark`) to measure your final score.
 
 ## Conversation Memory
 
-`./ask` is **multi-turn**: the agent remembers your conversation and can answer follow-ups. The prompt shows the turn count (e.g., `ask [3]>`). Memory is kept for up to 20 turns, then the oldest turns are trimmed automatically.
+`./ask` is multi-turn: the agent remembers your conversation and can answer follow-ups. The prompt shows the turn count (e.g., `ask [3]>`). Memory is kept for up to 20 turns, then oldest turns are trimmed.
 
 Three things clear memory:
 
-- **`clear`**: Manually reset conversation without restarting.
-- **`switch`**: Changing agents always clears memory (the new agent starts fresh).
-- **`level <L>, <N>`**: GAIA questions are sent **standalone** with no prior context, so the agent cannot be confused by earlier turns. After the answer, the Q&A pair is seeded into memory for follow-ups.
+- **`clear`** - manually reset without restarting
+- **`switch`** - changing agents always clears memory
+- **`level` / `level dev`** - GAIA questions are sent standalone (no prior context) so the agent can't be confused by earlier turns. After the answer, the Q&A is seeded into memory for follow-ups.
 
-If a question fails (timeout, API error), the failed message is removed from memory so it does not pollute future turns.
+If a question fails (timeout, API error), the failed message is removed from memory so it doesn't affect future turns.
 
 ## Commands
 
@@ -186,27 +188,30 @@ Type `help` in `./ask` for the full list. Key commands:
 
 | Command | What it does |
 |---------|-------------|
-| `level <L>` | Show Level L questions (1, 2, or 3) |
-| `level <L>, <N>` | Run question N from Level L (e.g., `level 1, 3`) |
+| `level` | Show test questions (no answers) |
+| `level <L>, <N>` | Run test question N from Level L |
+| `level dev` | Show dev questions (with expected answers) |
+| `level dev <L>, <N>` | Run dev question with answer checking |
 | `benchmark [agent]` | Run 20-question scored leaderboard |
-| `switch [agent]` | Switch to a built-in agent or load your own config (`switch my-agent/config.yml`). Clears memory. |
+| `switch [agent]` | Change agent or load a custom config. Clears memory. |
 | `clear` | Reset conversation memory |
 | `info` | Current agent, model, and tools |
-| `status` | Services and API key health |
-| `tracing` | Open Phoenix traces in browser |
+| `status` | Service and API key health |
+| `tracing` | Start Phoenix and open traces in browser |
 | `verbose on/off` | Show/hide full model reasoning |
-| `quit` | Exit the `./ask` program (note: Ctrl+C does **not** work) |
+| `help` | Full command reference |
+| `quit` | Exit (Ctrl+C also works) |
 
 ## Setup
 
-### Path A: GPU instance (all 4 agents)
+### Path A: GPU instance (all agents)
 
 **What you need:**
 - Linux with **8 GPUs, ~640 GB VRAM total** (e.g., 8x H100 80GB, 8x A100 80GB). Tested on GCP `a3-highgpu-8g` and Brev `8xH100`.
-- **300 GB free disk space** for [MiniMax M2.5](https://huggingface.co/MiniMaxAI/MiniMax-M2.5) model weights (~220 GB). MiniMax M2.5 is a 456B MoE model served via vLLM with `--tensor-parallel-size 8`.
-- **NVIDIA drivers** installed (`nvidia-smi` should show all 8 GPUs)
-- Python 3.10+ and `tmux` (pre-installed on standard GPU cloud images)
-- **3 API keys** (free tiers are sufficient). Sign up before running setup: [Tavily](https://tavily.com/), [NVIDIA Build](https://build.nvidia.com/), [HuggingFace](https://huggingface.co/settings/tokens). See [API Keys](#api-keys) for details.
+- **300 GB free disk** for [MiniMax M2.5](https://huggingface.co/MiniMaxAI/MiniMax-M2.5) model weights (~220 GB).
+- **NVIDIA drivers** installed (`nvidia-smi` should show all 8 GPUs).
+- Python 3.10+ and `tmux` (pre-installed on most GPU cloud images).
+- **3 API keys** (free tiers work). Sign up before running setup so you have them ready: [Tavily](https://tavily.com/), [NVIDIA Build](https://build.nvidia.com/), [HuggingFace](https://huggingface.co/settings/tokens). See [API Keys](#api-keys) below.
 
 **Steps:**
 
@@ -218,78 +223,96 @@ bash gaia_tools/start_services.sh    # ~5-10 min (vLLM loads model into GPU memo
 ./ask                                # verify status line shows all OK
 ```
 
-You should see `Agent: ultrafast | vLLM: OK | NAT: OK | Phoenix: OK | Verbose: ON`. All 4 agents are available via `switch`, including ultrafast-nogpu (cloud LLM, no local GPU needed).
+You should see `Agent: ultrafast | vLLM: OK | NAT: OK | Phoenix: OK`. All agents are available via `switch`.
 
-### Path B: No GPU (cloud agent only)
+### Path B: Local Ollama (no GPU)
 
 **What you need:**
-- Linux or macOS (tested on Ubuntu 22.04, macOS 14+). No GPU, no VRAM, no model download.
-- **3 API keys** (free tiers are sufficient). Sign up before running setup: [Tavily](https://tavily.com/), [NVIDIA Build](https://build.nvidia.com/), [HuggingFace](https://huggingface.co/settings/tokens). See [API Keys](#api-keys) for details.
-- The **NVIDIA Build** key (NGC_API_KEY) also serves as the LLM endpoint for this path, calling [Qwen 3.5-122B-A10B](https://build.nvidia.com/qwen/qwen3-5-122b-a10b) on NVIDIA Build (rate-limited to ~40 RPM, automatic retries).
-- **Credits:** 1,000 free on signup (personal email), up to 5,000 with a business or institutional email (Profile > Request More). A 20-question benchmark uses ~500+ credits. Check balance at [build.nvidia.com/settings/api-keys](https://build.nvidia.com/settings/api-keys).
+- macOS (Apple Silicon M1/M2/M3/M4) or Linux. No GPU required.
+- **32 GB RAM recommended** (the default 27B model uses ~17 GB). 16 GB Macs: edit config to use `qwen3.5:9b` (~6.6 GB) instead.
+- **2 API keys**: [Tavily](https://tavily.com/) (search) and [HuggingFace](https://huggingface.co/settings/tokens) (dataset).
+- [Ollama](https://ollama.com/) installed: `brew install ollama` on macOS, or see [ollama.com](https://ollama.com/) for Linux.
 
 **Steps:**
 
 ```bash
+# 1. Install Ollama and pull the model (~17 GB download; ~6.6 GB for qwen3.5:9b)
+brew install ollama          # macOS; see ollama.com for Linux
+ollama serve &               # start Ollama in the background
+ollama pull qwen3.5:27b            # 17 GB; for 16 GB Macs use: ollama pull qwen3.5:9b
+
+# 2. Clone the repo
 git clone https://github.com/mnajafian-nv/nat-agent-lab.git nat-agent-lab
 cd nat-agent-lab
-bash setup.sh --cloud                # ~5 min; prompts for API keys, skips model download
-./ask                                # verify status line shows all OK
+
+# 3. Set up Python environment
+python3 -m venv .venv && source .venv/bin/activate
+pip install "nvidia-nat[langchain,phoenix]==1.5.0" requests pyyaml datasets \
+    openpyxl beautifulsoup4 pypdf python-pptx sympy dask distributed
+pip install -e gaia_tools/
+
+# 4. Add your API keys
+cp .env.example .env
+# Edit .env and add your TAVILY_API_KEY and HF_TOKEN
+
+# 5. Start chatting
+./ask
+switch ollama
 ```
 
-You should see `Agent: ultrafast-nogpu | vLLM: off (not needed) | NAT: OK | Phoenix: off | Verbose: ON`. Only the ultrafast-nogpu agent is available (the other 3 need local vLLM). Phoenix starts on demand when you type `tracing`.
+You should see `Agent: ollama | vLLM: off (not needed) | NAT: OK`. The agent runs locally. Only Tavily (web search) and HuggingFace (dataset) need API keys.
+
+**Trade-offs:** Qwen3.5 27B is smaller than MiniMax M2.5 456B (Path A), so accuracy on harder questions will be lower. However, the Qwen 3.5 architecture is the latest generation with significantly improved reasoning and tool-calling, partially closing the gap. Path B is great for experimenting without a GPU; use Path A for best accuracy.
 
 ### API Keys
 
-Three keys are needed for both paths (free tiers are sufficient). `setup.sh` prompts for them interactively and saves to `.env`. **Sign up for all three accounts before running `setup.sh`** so you have the keys ready when prompted.
+`setup.sh` prompts for all three keys interactively and saves them to `.env`. **Sign up before running setup** so you have the keys ready. Path B (Ollama) only needs Tavily and HuggingFace.
 
 | Key | Sign up | Used for |
 |-----|---------|----------|
 | **Tavily** | [tavily.com](https://tavily.com/) | Internet search tool |
-| **NVIDIA Build** | [build.nvidia.com](https://build.nvidia.com/) | Vision/audio tools (both paths); main LLM (Path B) |
+| **NVIDIA Build** | [build.nvidia.com](https://build.nvidia.com/) | Vision and audio tools (Path A; optional for Path B) |
 | **HuggingFace** | [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) | GAIA dataset download and leaderboard submission |
 
 **Tavily (TAVILY_API_KEY):**
-1. Go to [tavily.com](https://tavily.com/) and create a free account.
-2. After signing in, your API key is shown on the dashboard. Copy it.
+1. Create a free account at [tavily.com](https://tavily.com/).
+2. Your API key is on the dashboard after signing in. Copy it.
 
 **NVIDIA Build (NGC_API_KEY):**
-1. Go to [build.nvidia.com](https://build.nvidia.com/) and click **Login** in the top right.
-2. Enter the email you want to use, then click **Login Help**.
-3. Click **"I don't have an NVIDIA account"** and follow the prompts to create one. You will need to enter a verification code sent to your email **and** verify via phone number.
-4. Once logged in, click your **profile icon** (top right) and select **API Keys**.
-5. Click **Generate API Key**, give it any name, and copy the key.
+1. Go to [build.nvidia.com](https://build.nvidia.com/) and click **Login** (top right).
+2. Click **Login Help**, then **"I don't have an NVIDIA account"** to create one. You'll verify by email and phone.
+3. Once logged in, click your **profile icon** > **API Keys** > **Generate API Key**. Copy it.
 
 **HuggingFace (HF_TOKEN):**
-1. Go to [huggingface.co](https://huggingface.co/) and create a free account if you don't have one.
-2. Once signed in, go to [Settings > Access Tokens](https://huggingface.co/settings/tokens).
-3. Create a new token with **Read** access. Copy the token.
+1. Create a free account at [huggingface.co](https://huggingface.co/).
+2. Go to [Settings > Access Tokens](https://huggingface.co/settings/tokens).
+3. Create a token with **Read** access. Copy it.
 
-**Coming back later?** Just run `./ask`. vLLM and Phoenix run in background tmux sessions that survive SSH disconnects. Each session starts fresh with the default agent (ultrafast if vLLM is running, ultrafast-nogpu otherwise).
+**Coming back later?** Just run `./ask`. vLLM and Phoenix run in background tmux sessions that survive SSH disconnects.
 
 ## Benchmark Results
 
-Each benchmark run saves results locally and submits to the leaderboard. Local files are saved to `<agent>/runs/runN_<config>/` (auto-numbered):
+Each benchmark run saves results locally and submits to the leaderboard. Files go to `<agent>/runs/runN_<config>/` (auto-numbered):
 
-| File | What it contains |
-|------|-----------------|
+| File | Contents |
+|------|----------|
 | `gaia_summary.json` | Score, correct count, time per question |
 | `gaia_results.json` | Every question with your agent's answers |
 | `benchmark.log` | Full terminal output |
-| `nat.log` | NAT server log (debug tool call failures) |
+| `nat.log` | NAT server log (for debugging tool call failures) |
 | `config.yml` | Snapshot of the YAML config used |
 
 ```bash
 cat ultrafast-agent/runs/latest/gaia_summary.json   # latest score
-bash gaia_tools/gaia_run.sh --history                # all runs
+bash gaia_tools/gaia_run.sh --history                # all past runs
 ```
 
-You can also run benchmarks from the command line instead of `./ask`:
+You can also run benchmarks from the command line:
 
 ```bash
-bash gaia_tools/gaia_run.sh --single          # single agent
-bash gaia_tools/gaia_run.sh --ultrafast       # ultrafast agent
-bash gaia_tools/gaia_run.sh -c my-agent/config.yml  # custom agent
+bash gaia_tools/gaia_run.sh --single                 # single agent
+bash gaia_tools/gaia_run.sh --ultrafast              # ultrafast agent
+bash gaia_tools/gaia_run.sh -c my-agent/config.yml   # your custom config
 ```
 
 ## Troubleshooting
@@ -297,79 +320,66 @@ bash gaia_tools/gaia_run.sh -c my-agent/config.yml  # custom agent
 **vLLM won't start or crashes**
 - Check GPU memory: `nvidia-smi`
 - Kill stale processes: `bash gaia_tools/start_services.sh --stop`
-- Verify model downloaded: `ls .cache/huggingface/hub/models--MiniMaxAI--MiniMax-M2.5/`
+- Check the model is downloaded: `ls .cache/huggingface/hub/models--MiniMaxAI--MiniMax-M2.5/`
 
 **NAT fails to start**
 - Check port 8000: `curl localhost:8000/health`
-- View NAT log: look in the run directory or `/tmp/nat_serve/`
+- Check the NAT log in the run directory or `/tmp/nat_serve/`
 
-**Phoenix not accessible from laptop**
-- Verify running: `curl localhost:6006`
-- Check port forwarding: `ssh -L 6006:localhost:6006 <your-ssh-host>`
+**Phoenix not accessible**
+- Check it's running: `curl localhost:6006`
+- If remote, forward the port: `ssh -L 6006:localhost:6006 <your-ssh-host>`
 - Phoenix is optional; agents work without it
 
-**Disk space issues during setup**
-- Clone to a partition with 300+ GB free (e.g., `/ephemeral/`, `/data/`)
-- Or run `bash setup.sh --cloud` to skip the model download
+**Disk space**
+- The model needs ~300 GB. Clone to a partition with enough room (`/ephemeral/`, `/data/`).
 - Check space: `df -h .`
 
-**vLLM is DOWN after logging back in**
-- vLLM runs in tmux. If the machine rebooted: `bash gaia_tools/start_services.sh`
-- Check if still loading: `tmux attach -t vllm` (Ctrl+B then D to detach)
+**vLLM shows DOWN after reconnecting**
+- It runs in tmux. If the machine rebooted: `bash gaia_tools/start_services.sh`
+- Check if it's still loading: `tmux attach -t vllm` (Ctrl+B, D to detach)
 
-**422 errors (ultrafast-nogpu)**
-- `./ask` auto-recovers: waits 30s, restarts NAT, retries once
-- Credits exhausted? Check balance: [build.nvidia.com/settings/api-keys](https://build.nvidia.com/settings/api-keys)
-- Burst rate limit? Wait a few minutes
-- Run `status` in `./ask` for diagnostics
-
-**macOS / Cloud-Only**
-- Use `bash setup.sh --cloud` to skip GPU checks and model downloads
-- `./ask` auto-selects the `ultrafast-nogpu` agent
+**No GPU / macOS**
+- Use the Ollama agent instead. See [Path B](#path-b-local-ollama-no-gpu) setup.
 
 ## File Structure
 
 ```
 .
-├── setup.sh                          # One-time environment setup (--cloud for no-GPU path)
-├── ask                               # Launch script (activates env, starts chat)
-├── README.md                         # This file
-├── LICENSE                           # Apache 2.0 (matches upstream NAT)
-├── .env.example                      # API key template
-├── gaia_questions.json               # GAIA validation questions (downloaded by setup.sh)
-├── gaia_files/                       # Attached files for GAIA questions
+├── setup.sh                            # One-time setup (GPU path)
+├── ask                                 # Launch script (activates venv, starts chat)
+├── gaia_questions.json                 # GAIA test questions (no answers)
+├── gaia_dev_questions.json             # GAIA dev questions (with answers, for tuning)
+├── gaia_files/                         # Attached files for GAIA questions
 ├── single-agent/
-│   └── gaia_agent.yml                # Single tool_calling_agent config
+│   └── gaia_agent.yml                  # Single agent config
 ├── multi-agent/
-│   └── gaia_agent_multi.yml          # Multi-agent orchestrator config
+│   └── gaia_agent_multi.yml            # Multi-agent orchestrator config
 ├── ultrafast-agent/
-│   └── gaia_agent_ultrafast.yml      # Ultrafast single-agent with routing prompt
-├── ultrafast-nogpu-agent/
-│   └── gaia_agent_ultrafast_nogpu.yml # ultrafast-nogpu (NVIDIA Build, no local GPU)
+│   └── gaia_agent_ultrafast.yml        # Ultrafast agent with prompt-driven routing
+├── ultrafast-ollama-agent/
+│   └── gaia_agent_ultrafast_ollama.yml # Ollama agent (no GPU needed)
 └── gaia_tools/
-    ├── ask.py                        # Interactive chat engine (called by ./ask)
-    ├── gaia_run.sh                   # One-command benchmark runner (any agent)
-    ├── gaia_run_all.sh               # Run all 3 local agents sequentially
-    ├── start_services.sh             # Start vLLM + Phoenix in tmux
-    ├── gaia_submit.py                # Benchmark engine with answer normalization
-    ├── prep_gaia_data.py             # Fetch GAIA data from HuggingFace (called by setup.sh)
-    ├── pyproject.toml                # Package config for custom tools (read_file, fetch_url, etc.)
+    ├── ask.py                          # Interactive chat engine
+    ├── gaia_run.sh                     # Benchmark runner
+    ├── gaia_run_all.sh                 # Run all 3 GPU agents sequentially
+    ├── start_services.sh               # Start vLLM + Phoenix in tmux
+    ├── gaia_submit.py                  # Benchmark scoring and submission
+    ├── prep_gaia_data.py               # Download GAIA data from HuggingFace
+    ├── tests/                          # Test suite (run: python3 -m pytest gaia_tools/tests/)
     └── src/gaia_tools/
-        ├── __init__.py
-        └── register.py               # Custom tool registration for NAT
+        └── register.py                 # Custom tool definitions for NAT
 ```
 
 ## References
 
 - [GAIA paper](https://arxiv.org/abs/2311.12983) (Mialon et al., 2023)
-- [Student leaderboard](https://huggingface.co/spaces/agents-course/Students_Leaderboard): 20 Level-1 questions, scored
-- [Official GAIA leaderboard](https://huggingface.co/spaces/gaia-benchmark/leaderboard): 300-question test set, answers hidden
-- [GAIA dataset](https://huggingface.co/datasets/gaia-benchmark/GAIA): submission instructions, terms of use
-- [NAT documentation](https://docs.nvidia.com/nemo/agent-toolkit/)
-- [NAT source code and examples](https://github.com/NVIDIA/NeMo-Agent-Toolkit)
-
-To compete on the official GAIA leaderboard, follow the submission instructions on the GAIA dataset page. Your agent works as-is; no code changes needed. The full 300-question test set takes 15-25 hours of GPU time per run.
+- [Student leaderboard](https://huggingface.co/spaces/agents-course/Students_Leaderboard) - 20 Level-1 questions, scored
+- [Official GAIA leaderboard](https://huggingface.co/spaces/gaia-benchmark/leaderboard) - 300-question test set, answers hidden
+- [GAIA dataset](https://huggingface.co/datasets/gaia-benchmark/GAIA) - terms of use, submission instructions
+- [NAT docs](https://docs.nvidia.com/nemo/agent-toolkit/) and [source](https://github.com/NVIDIA/NeMo-Agent-Toolkit)
+- [Anthropic prompt engineering guide](https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/overview) - useful for system prompt design
 
 ---
 
-**Tested with:** NAT 1.5.0, vLLM 0.18.0, Python 3.12, MiniMax M2.5 (local), Qwen 3.5-122B-A10B (cloud), on 8x H100 (Brev/GCP).
+**Tested with:** NAT 1.5.0, vLLM 0.18.0, Python 3.12, MiniMax M2.5 (vLLM), Qwen3.5 27B (Ollama). Hardware: 8x H100 (Brev/GCP), macOS Apple Silicon.
