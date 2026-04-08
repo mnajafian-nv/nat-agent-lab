@@ -690,10 +690,10 @@ _IDENTITY_PATTERNS = re.compile(
 
 
 _AGENT_BACKEND_LABELS = {
-    "single": "simplest: 1 agent, all tools, local GPU",
-    "multi": "3 specialist sub-agents + orchestrator, local GPU",
-    "ultrafast": "fastest: prompt-driven routing, local GPU",
-    "ollama": "local Ollama: Qwen3.5 35B-A3B, no GPU/API needed",
+    "single": "simplest: 1 agent, all tools, MiniMax M2.5 456B MoE (vLLM)",
+    "multi": "multi-agent: 3 sub-agents + orchestrator, MiniMax M2.5 456B MoE (vLLM)",
+    "ultrafast": "fastest: prompt-driven routing, MiniMax M2.5 456B MoE (vLLM)",
+    "ollama": "least accurate: ultrafast design, Qwen3.5 35B via Ollama (CPU, no GPU needed)",
 }
 
 
@@ -705,7 +705,7 @@ def pick_agent(default="ultrafast"):
         tag = " (default)" if i == default_idx else ""
         label = _AGENT_BACKEND_LABELS.get(name, path)
         print(f"    {i}. {name:<{col}}{label}{tag}")
-    print(f"    {len(AGENTS)+1}. {'custom':<{col}}your own YAML config")
+    print(f"    {len(AGENTS)+1}. {'custom':<{col}}your own YAML config (e.g., my-agent/config.yml)")
 
     while True:
         try:
@@ -853,8 +853,8 @@ def _print_commands():
     COL = 24
     print(f"  {BOLD}Quick reference:{RESET}  (type {BOLD}help{RESET} for full details)")
     print(f"    {'<any text>':{COL}}Ask anything (multi-turn, remembers context)")
-    print(f"    {'level <L>, <N>':{COL}}Run test question (no answers)")
-    print(f"    {'level dev <L>, <N>':{COL}}Run dev question (with answer checking)")
+    print(f"    {'level <L>, <N>':{COL}}Run test question N from Level L (no answers)")
+    print(f"    {'level dev <L>, <N>':{COL}}Run dev question N from Level L (with answer checking)")
     print(f"    {'benchmark':{COL}}Run 20-question HF leaderboard")
     print(f"    {'switch <agent>':{COL}}Change agent (single, multi, ultrafast, ollama)")
     print(f"    {'status':{COL}}Services and API key health")
@@ -879,7 +879,7 @@ def _print_help():
     print(f"    {'level <L>, <N>':{COL}}Run test question N from Level L")
     print(f"    {'level dev':{COL}}Show dev questions (with expected answers)")
     print(f"    {'level dev <L>':{COL}}List Level L dev questions")
-    print(f"    {'level dev <L>, <N>':{COL}}Run dev question with answer checking")
+    print(f"    {'level dev <L>, <N>':{COL}}Run dev question N from Level L (with answer checking)")
     print(f"    {'benchmark [agent]':{COL}}Run 20-question scored leaderboard")
     print(f"    {'':24s}  View scores: https://huggingface.co/spaces/agents-course/Students_Leaderboard")
     print(f"    {'':24s}  Per-question results: <agent>/runs/latest/gaia_results.json")
@@ -887,10 +887,11 @@ def _print_help():
     print(f"  {BOLD}Agent management:{RESET}")
     print(f"    {'switch':{COL}}Interactive agent picker")
     print(f"    {'switch <agent>':{COL}}Switch directly to an agent:")
-    print(f"    {'':24s}  single          - single-agent pipeline")
-    print(f"    {'':24s}  multi           - multi-agent pipeline")
-    print(f"    {'':24s}  ultrafast       - fast, requires local vLLM")
-    print(f"    {'':24s}  ollama          - local Ollama (Qwen3.5 35B-A3B, no GPU/API needed)")
+    print(f"    {'':24s}  1. single     - simplest: 1 agent, all tools, MiniMax M2.5 (vLLM)")
+    print(f"    {'':24s}  2. multi      - multi-agent: 3 sub-agents + orchestrator, MiniMax M2.5 (vLLM)")
+    print(f"    {'':24s}  3. ultrafast  - fastest: prompt-driven routing, MiniMax M2.5 (vLLM)")
+    print(f"    {'':24s}  4. ollama     - least accurate: uses ultrafast design, Qwen3.5 35B via Ollama (CPU, no GPU)")
+    print(f"    {'':24s}  5. custom     - your own YAML config (e.g., my-agent/config.yml)")
     print(f"    {'info':{COL}}Show current agent, model, and tools")
     print()
     print(f"  {BOLD}System:{RESET}")
@@ -1267,12 +1268,12 @@ def cmd_benchmark(questions=None, arg=""):
 
     print("\n  Run the GAIA benchmark (20 questions from HF leaderboard).")
     print("  Pick an agent:")
-    print("    1. single            simplest: 1 agent, all tools, local GPU")
-    print("    2. multi             3 specialist sub-agents + orchestrator, local GPU")
-    print("    3. ultrafast         fastest: prompt-driven routing, local GPU")
-    print("    4. ollama            local Ollama, no GPU needed")
-    print("    5. all local         single + multi + ultrafast, requires local GPU")
-    print("    6. custom            your own YAML config")
+    print("    1. single     simplest: 1 agent, all tools, MiniMax M2.5 456B MoE (vLLM)")
+    print("    2. multi      multi-agent: 3 sub-agents + orchestrator, MiniMax M2.5 456B MoE (vLLM)")
+    print("    3. ultrafast  fastest: prompt-driven routing, MiniMax M2.5 456B MoE (vLLM)")
+    print("    4. ollama     least accurate: uses ultrafast design, Qwen3.5 35B via Ollama (CPU, no GPU)")
+    print("    5. all        runs single + multi + ultrafast sequentially")
+    print("    6. custom     your own YAML config (e.g., my-agent/config.yml)")
     print("    7. cancel")
 
     try:
