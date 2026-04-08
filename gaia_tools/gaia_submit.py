@@ -14,6 +14,7 @@ import os
 import re
 import shutil
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -472,7 +473,7 @@ def ask_with_retry(question_text: str, timeout: int) -> tuple[str, float, bool]:
         else:
             retry_q = question_text[:2000]
         short_prompt = RETRY_PROMPT_TEMPLATE.format(question=retry_q)
-        retry_timeout = min(timeout, 180) if retry_reason == "timeout" else timeout
+        retry_timeout = min(timeout, max(180, timeout // 2)) if retry_reason == "timeout" else timeout
         retry_start = time.time()
         retry_answer = ask_nat(short_prompt, timeout=retry_timeout)
         elapsed += time.time() - retry_start
@@ -690,7 +691,33 @@ def main():
         short_q = q.get("question", q.get("input", ""))[:80]
         print(f"[{i+1}/{len(questions)}] (L{level}) {short_q}...")
 
-        raw_answer, elapsed, was_retry = ask_with_retry(question_text, args.timeout)
+        try:
+            _tty = open("/dev/tty", "w") if sys.stdin.isatty() else None
+        except OSError:
+            _tty = None
+
+        if _tty:
+            _result: list = [None]
+            _done = threading.Event()
+
+            def _worker():
+                _result[0] = ask_with_retry(question_text, args.timeout)
+                _done.set()
+
+            threading.Thread(target=_worker, daemon=True).start()
+            _chars = ["|", "/", "-", "\\"]
+            _t0 = time.time()
+            _ci = 0
+            while not _done.wait(timeout=0.25):
+                _tty.write(f"\r  {_chars[_ci % 4]} {time.time()-_t0:.0f}s")
+                _tty.flush()
+                _ci += 1
+            _tty.write("\r" + " " * 16 + "\r")
+            _tty.flush()
+            _tty.close()
+            raw_answer, elapsed, was_retry = _result[0]
+        else:
+            raw_answer, elapsed, was_retry = ask_with_retry(question_text, args.timeout)
         is_failed = raw_answer.startswith("FAILED:")
 
         submitted = raw_answer
@@ -733,7 +760,8 @@ def main():
             "was_retry": was_retry,
             "elapsed_seconds": round(elapsed, 1),
         })
-        answers_for_hf.append({"task_id": task_id, "submitted_answer": submitted})
+        hf_answer = "N/A" if is_failed else submitted
+        answers_for_hf.append({"task_id": task_id, "submitted_answer": hf_answer})
         prev_was_failed = is_failed
 
     total_elapsed = time.time() - benchmark_start

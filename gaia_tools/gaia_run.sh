@@ -72,6 +72,11 @@ while [[ $# -gt 0 ]]; do
             CONFIG="ultrafast-agent/gaia_agent_ultrafast.yml"
             AGENT_MODE="Ultrafast"
             shift ;;
+        --ollama)
+            CONFIG="ultrafast-ollama-agent/gaia_agent_ultrafast_ollama.yml"
+            AGENT_MODE="Ollama"
+            BENCHMARK_TIMEOUT=720
+            shift ;;
         -c|--config)    CONFIG="$2"; shift 2 ;;
         -u|--username)  USERNAME="$2"; shift 2 ;;
         --submit)       SUBMIT="--submit"; shift ;;
@@ -181,11 +186,12 @@ fi
 
 # ---- Validate config was specified ----
 if [[ -z "$CONFIG" ]]; then
-    die "No config specified. Use --single, --multi, --ultrafast, or -c <path>.
+    die "No config specified. Use --single, --multi, --ultrafast, --ollama, or -c <path>.
   Examples:
     bash gaia_tools/gaia_run.sh --single
     bash gaia_tools/gaia_run.sh --multi
     bash gaia_tools/gaia_run.sh --ultrafast
+    bash gaia_tools/gaia_run.sh --ollama
     bash gaia_tools/gaia_run.sh -c single-agent/gaia_agent.yml"
 fi
 
@@ -227,9 +233,6 @@ else
             export ORG_NAME
         fi
         if [[ -z "$TEAM_NAME" ]]; then
-            echo ""
-            echo "  Leaderboard name will be: NAT-${ORG_NAME}-<TEAM_NAME>-${AGENT_MODE:-Agent}"
-            echo ""
             read -rp "  Enter your team name (e.g. Instructor, AgentSmiths): " TEAM_NAME
             [[ -z "$TEAM_NAME" ]] && die "No team name entered."
             export TEAM_NAME
@@ -239,6 +242,8 @@ else
         else
             USERNAME="NAT-${ORG_NAME}-${TEAM_NAME}"
         fi
+        echo ""
+        echo "  Leaderboard name: ${USERNAME}"
     fi
 fi
 

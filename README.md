@@ -136,7 +136,7 @@ ask> switch my-agent/config.yml
 - **Tighten answer formatting.** GAIA exact-match scoring is strict. If the agent gets the right answer but wraps it in extra text, add formatting rules to the system prompt.
 - **Reduce latency.** Total time = (LLM calls x per-call latency) + tool time. Target fewer LLM calls and shorter prompts.
 
-**On swapping models:** each LLM has its own `max_tokens`, `temperature` range, chat template, and tool-calling format. If you change `model` in your YAML, adjust these parameters to match. The built-in configs are tuned for MiniMax M2.5 (vLLM) and Qwen3.5 27B (Ollama). See [NAT examples](https://github.com/NVIDIA/NeMo-Agent-Toolkit/tree/main/examples) for other models.
+**On swapping models:** each LLM has its own `max_tokens`, `temperature` range, chat template, and tool-calling format. If you change `model` in your YAML, adjust these parameters to match. The built-in configs are tuned for MiniMax M2.5 (vLLM) and Qwen3.5 35B-A3B (Ollama). See [NAT examples](https://github.com/NVIDIA/NeMo-Agent-Toolkit/tree/main/examples) for other models.
 
 **The iteration loop:** edit YAML, run a `level dev` question, check traces, repeat. When you're confident, run `benchmark custom` to submit your score.
 
@@ -148,18 +148,18 @@ ask> switch my-agent/config.yml
 
 ## Agent Architectures
 
-The GPU agents (single, multi, ultrafast) share the full tool set: `internet_search`, `wiki_search`, `read_file`, `fetch_url`, `python_executor`, `describe_image`, `describe_image_alt`, `transcribe_audio`, `get_youtube_transcript`, `solve_chess`, `current_datetime`. The Ollama agent has most of these but skips `describe_image_alt` and `solve_chess` to keep context smaller.
+The GPU agents (single, multi, ultrafast) share the full tool set: `internet_search`, `wiki_search`, `read_file`, `fetch_url`, `python_executor`, `describe_image`, `describe_image_alt`, `transcribe_audio`, `get_youtube_transcript`, `solve_chess`, `current_datetime`. The Ollama agent has most of these but skips `describe_image_alt` to keep context smaller.
 
 | Agent | Config | Architecture | LLM | Key difference |
 |-------|--------|-------------|-----|----------------|
 | **Single** | [`single-agent/gaia_agent.yml`](single-agent/gaia_agent.yml) | Flat `tool_calling_agent` with direct access to all tools | MiniMax M2.5 456B MoE (local vLLM) | Simplest design. One LLM call per tool step, no routing overhead. |
 | **Multi** | [`multi-agent/gaia_agent_multi.yml`](multi-agent/gaia_agent_multi.yml) | Orchestrator dispatches to 3 specialist sub-agents (web, file, multimedia) | MiniMax M2.5 456B MoE (local vLLM) | Extra LLM call for routing, but specialists get focused prompts and tools. |
 | **Ultrafast** | [`ultrafast-agent/gaia_agent_ultrafast.yml`](ultrafast-agent/gaia_agent_ultrafast.yml) | Flat agent with TYPE A/B/C/D routing baked into the system prompt | MiniMax M2.5 456B MoE (local vLLM) | Same flat architecture as Single, but prompt-driven routing skips the orchestrator call. |
-| **Ollama** | [`ultrafast-ollama-agent/gaia_agent_ultrafast_ollama.yml`](ultrafast-ollama-agent/gaia_agent_ultrafast_ollama.yml) | Same design as Ultrafast, running locally via Ollama | Qwen3.5 27B (CPU/Apple Silicon) | No GPU needed, no API keys for inference. Latest Qwen 3.5 architecture, needs 32+ GB RAM. For 16 GB Macs, edit config to use `qwen3.5:9b`. |
+| **Ollama** | [`ultrafast-ollama-agent/gaia_agent_ultrafast_ollama.yml`](ultrafast-ollama-agent/gaia_agent_ultrafast_ollama.yml) | Same design as Ultrafast, running locally via Ollama | Qwen3.5 35B-A3B (CPU/Apple Silicon) | No GPU needed, no API keys for inference. MoE architecture (35B total / 3B active), needs 32+ GB RAM. For 16 GB Macs, edit config to use `qwen3.5:9b`. |
 
 Each agent is defined entirely by its YAML config. NAT supports additional architectures (`react_agent`, `router_agent`, `sequential_executor`, etc.). See step 6 for how to experiment.
 
-**Ollama notes:** Qwen3.5 27B needs ~17 GB disk and ~22 GB RAM. It uses the latest Qwen 3.5 architecture which significantly improves reasoning and tool-calling over older generations. Needs 32+ GB RAM; for 16 GB Macs, edit the config to use `qwen3.5:9b` (~6.6 GB) instead. Vision and audio tools (`describe_image`, `transcribe_audio`) still work because they call external APIs, not the local model. They do require an NGC_API_KEY. For best GAIA accuracy, use the GPU agents.
+**Ollama notes:** Qwen3.5 35B-A3B needs ~24 GB disk and ~32 GB RAM. It is a MoE model (35B total / 3B active) from the latest Qwen 3.5 generation — fast inference with strong tool-calling. For 16 GB Macs, edit the config to use `qwen3.5:9b` (~6.6 GB) instead. Vision and audio tools (`describe_image`, `transcribe_audio`) still work because they call external APIs, not the local model. They do require an NGC_API_KEY. For best GAIA accuracy, use the GPU agents.
 
 ## Two Question Sets
 
@@ -229,7 +229,7 @@ You should see `Agent: ultrafast | vLLM: OK | NAT: OK | Phoenix: OK`. All agents
 
 **What you need:**
 - macOS (Apple Silicon M1/M2/M3/M4) or Linux. No GPU required.
-- **32 GB RAM recommended** (the default 27B model uses ~17 GB). 16 GB Macs: edit config to use `qwen3.5:9b` (~6.6 GB) instead.
+- **32 GB RAM recommended** (the default 35B-A3B model uses ~24 GB). 16 GB Macs: edit config to use `qwen3.5:9b` (~6.6 GB) instead.
 - **2 API keys required**: [Tavily](https://tavily.com/) (search) and [HuggingFace](https://huggingface.co/settings/tokens) (dataset). [NVIDIA Build](https://build.nvidia.com/) is optional — only needed for vision and audio tools.
 - No Ollama pre-install needed — `setup.sh` installs it automatically.
 
@@ -247,11 +247,11 @@ Then at the prompt:
 switch ollama
 ```
 
-`setup.sh` auto-detects that you have no GPU and handles everything: installs Ollama if needed, selects the right model based on your RAM (27b for 32+ GB, 9b for 16 GB), pulls it, sets up the Python environment, and prompts for API keys.
+`setup.sh` auto-detects that you have no GPU and handles everything: installs Ollama if needed, selects the right model based on your RAM (35b-a3b for 32+ GB, 9b for 16 GB), pulls it, sets up the Python environment, and prompts for API keys.
 
 You should see `Agent: ollama | vLLM: off (not needed) | NAT: OK`. The agent runs locally. Only Tavily (web search) and HuggingFace (dataset) need API keys.
 
-**Trade-offs:** Qwen3.5 27B is smaller than MiniMax M2.5 456B (Path A), so accuracy on harder questions will be lower. However, the Qwen 3.5 architecture is the latest generation with significantly improved reasoning and tool-calling, partially closing the gap. Path B is great for experimenting without a GPU; use Path A for best accuracy.
+**Trade-offs:** Qwen3.5 35B-A3B is smaller than MiniMax M2.5 456B (Path A), so accuracy on harder questions will be lower. However, the MoE architecture gives fast inference with strong tool-calling, partially closing the gap. Path B is great for experimenting without a GPU; use Path A for best accuracy.
 
 ### API Keys
 
@@ -295,6 +295,18 @@ Each benchmark run saves results locally and submits to the leaderboard. Files g
 cat ultrafast-agent/runs/latest/gaia_summary.json   # latest score
 bash gaia_tools/gaia_run.sh --history                # all past runs
 ```
+
+### Viewing your submission on the leaderboard
+
+After a benchmark run your answers are automatically submitted and your team appears on the [student leaderboard](https://huggingface.co/spaces/agents-course/Students_Leaderboard) within seconds. Search for your team name (`NAT-<org>-<team>-<agent>`) to see your score.
+
+The leaderboard shows aggregate scores only — to see which individual questions you got right or wrong, open the local results file:
+
+```bash
+cat <agent>/runs/latest/gaia_results.json
+```
+
+Each entry has the question, your submitted answer, the expected answer, and whether it was marked correct.
 
 You can also run benchmarks from the command line:
 
@@ -371,4 +383,4 @@ bash gaia_tools/gaia_run.sh -c my-agent/config.yml   # your custom config
 
 ---
 
-**Tested with:** NAT 1.5.0, vLLM 0.18.0, Python 3.12, MiniMax M2.5 (vLLM), Qwen3.5 27B (Ollama). Hardware: 8x H100 (Brev/GCP), macOS Apple Silicon.
+**Tested with:** NAT 1.5.0, vLLM 0.18.0, Python 3.12, MiniMax M2.5 (vLLM), Qwen3.5 35B-A3B (Ollama). Hardware: 8x H100 (Brev/GCP), macOS Apple Silicon.
