@@ -1,0 +1,120 @@
+# ============================================================================
+# ultrafast-ollama: Ultrafast architecture, local Ollama LLM
+#
+# Same agent design as ultrafast, but the LLM runs on Ollama locally.
+# No GPU required (runs on CPU via Apple Silicon), no API keys for inference.
+# Requires: brew install ollama && ollama pull qwen3.5:27b
+#
+# Uses _type: openai (ChatOpenAI) pointed at Ollama's OpenAI-compatible
+# endpoint on port 11434.
+#
+# Model: Qwen3.5 27B is a dense 27B model from the latest Qwen 3.5 generation
+# (~17 GB Q4_K_M quantization, 256K context). Needs ~22 GB RAM; runs well on
+# 32+ GB Macs. For 16 GB Macs, use qwen3.5:9b (~6.6 GB) instead.
+#
+# Trade-off vs cloud agents:
+#   + Completely free, no rate limits, no API keys for inference
+#   + Fast responses (local, no network round-trips)
+#   - Smaller model (27B vs 122B cloud) — but latest architecture partially closes the gap
+#
+# Trade-off vs ultrafast (vLLM):
+#   + Works on Mac (Apple Silicon), no NVIDIA GPU needed
+#   - Smaller model (27B vs 456B MoE)
+#
+# To switch models: ollama pull <model> and change model_name below.
+# Browse models at: https://ollama.com/library
+# ============================================================================
+
+llms:
+  ollama_llm:
+    _type: openai
+    base_url: "http://localhost:11434/v1"
+    api_key: "not-needed"
+    model_name: qwen3.5:27b
+    temperature: 0.0
+    max_tokens: 4096
+    max_retries: 3
+    request_timeout: 120
+
+functions:
+  internet_search:
+    _type: tavily_internet_search
+    max_results: 3
+    search_depth: basic
+  wiki_search:
+    _type: wiki_search
+    max_results: 3
+  current_datetime:
+    _type: current_datetime
+  read_file:
+    _type: read_file
+    max_chars: 50000
+  fetch_url:
+    _type: fetch_url
+    max_chars: 35000
+    timeout: 30
+  python_executor:
+    _type: python_executor
+    timeout: 60
+  describe_image:
+    _type: describe_image
+    model: qwen/qwen3.5-397b-a17b
+    api_key_env: NGC_API_KEY
+    base_url: "https://integrate.api.nvidia.com/v1"
+    max_tokens: 2048
+  transcribe_audio:
+    _type: transcribe_audio
+    api_key_env: NGC_API_KEY
+  get_youtube_transcript:
+    _type: get_youtube_transcript
+
+general:
+  use_uvloop: true
+  telemetry:
+    tracing:
+      phoenix:
+        _type: phoenix
+        endpoint: http://localhost:6006/v1/traces
+        project: gaia_ultrafast_ollama
+
+workflow:
+  _type: tool_calling_agent
+  tool_names:
+    - internet_search
+    - wiki_search
+    - current_datetime
+    - read_file
+    - fetch_url
+    - python_executor
+    - describe_image
+    - transcribe_audio
+    - get_youtube_transcript
+  llm_name: ollama_llm
+  verbose: true
+  max_iterations: 8
+  max_history: 20
+  handle_tool_errors: true
+  system_prompt: >
+    You are a research assistant. Use tools to answer questions. For greetings, respond briefly without tools.
+
+    RULES: ALWAYS use tools to find answers. NEVER answer from memory. Call ONE tool at a time. Keep responses short.
+
+    TOOLS:
+    - internet_search: search the web. Short queries only.
+    - wiki_search: search Wikipedia. Use exact names.
+    - fetch_url: fetch a URL's content.
+    - read_file: read a local file.
+    - python_executor: run Python code. Use print() for output. Available: stdlib, pandas, numpy, scipy, sympy, openpyxl, pypdf, beautifulsoup4. Do NOT use urllib/requests — use fetch_url instead.
+    - describe_image: describe or analyze an image. Pass file path and a specific question.
+    - transcribe_audio: transcribe speech from an audio file. Pass the file path.
+    - get_youtube_transcript: get transcript of a YouTube video. Pass the video ID (not full URL).
+    - current_datetime: get current date and time.
+
+    STEPS: 1) Search for info. 2) If needed, use python_executor to process data. 3) Give final answer.
+
+    ANSWER FORMAT (plain text only, no LaTeX):
+    End with: FINAL ANSWER: [answer]
+    - Number: digits only, no commas.
+    - Name: no titles (Dr./Mr.), no articles (the/a).
+    - List: "item1, item2, item3".
+    - If unsure, give best guess.
