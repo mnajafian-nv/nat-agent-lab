@@ -15,12 +15,19 @@ runs/
 *.pid
 .benchmark.lock
 .test-tmp/
+.tmp/
 gaia_results.json
 gaia_summary.json
 
 # GAIA dataset (gated, downloaded by setup.sh)
 gaia_questions.json
+gaia_dev_questions.json
 gaia_files/
+
+# Python build artifacts
+*.egg-info/
+dist/
+build/
 
 # Model cache
 .cache/
@@ -29,6 +36,7 @@ huggingface/
 # OS junk
 .DS_Store
 Thumbs.db
+nohup.out
 
 # IDE
 .vscode/
