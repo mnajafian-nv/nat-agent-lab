@@ -5,12 +5,6 @@
 # No GPU required (runs on CPU via Apple Silicon), no API keys for inference.
 # Requires: brew install ollama && ollama pull qwen3.5:35b-a3b
 #
-# Uses _type: openai (ChatOpenAI) pointed at Ollama's OpenAI-compatible
-# endpoint on port 11434.
-#
-# Model: Qwen3.5 35B-A3B is a MoE model (35B total / 3B active) from the latest
-# Qwen 3.5 generation (~24 GB, 256K context). Needs ~32 GB RAM; runs well on
-# 32+ GB Macs.
 #
 # Trade-off vs cloud agents:
 #   + Completely free, no rate limits, no API keys for inference
