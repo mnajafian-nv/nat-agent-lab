@@ -1,8 +1,7 @@
 # ============================================================================
 # Ultrafast GAIA: Single tool_calling_agent with embedded routing methodology
 #
-# Inspired by NVIDIA Retail Agentic Commerce "recommendation-ultrafast.yml":
-# instead of a separate orchestrator LLM call for routing, the routing logic
+# Instead of a separate orchestrator LLM call for routing, the routing logic
 # is embedded directly in the system prompt. One agent, all tools, one LLM
 # call per tool use. Eliminates orchestrator overhead entirely.
 #
