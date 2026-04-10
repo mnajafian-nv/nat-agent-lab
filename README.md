@@ -6,7 +6,7 @@ In this lab you'll get hands-on with the problem. You'll run agents against real
 
 **You'll work with three tools:**
 
-- **[NAT](https://github.com/NVIDIA/NeMo-Agent-Toolkit)** (NeMo Agent Toolkit): NVIDIA's open-source agent framework. You define an agent entirely in YAML (model, tools, system prompt, architecture) and NAT handles orchestration, tool execution, and LLM calls. No Python glue code needed.
+- **[NAT](https://github.com/NVIDIA/NeMo-Agent-Toolkit)** (NeMo Agent Toolkit): NVIDIA's open-source library that adds intelligence to AI agents across any framework, enhancing speed, accuracy, and decision-making through enterprise-grade instrumentation, observability, and continuous learning. You define an agent entirely in YAML (model, tools, system prompt, architecture) and NAT handles orchestration, tool execution, and LLM calls.
 - **[GAIA](https://arxiv.org/abs/2311.12983)**: a benchmark of real-world questions that require multi-step reasoning and tool use. These aren't toy problems. They involve reading spreadsheets, analyzing images, searching the web, running calculations, and combining it all into a precise answer. The repo includes a test set (for benchmarking) and a dev set (with expected answers, for tuning).
 - **[Phoenix](https://docs.arize.com/phoenix)**: a tracing UI built on OpenTelemetry. Every LLM call, tool invocation, and routing decision shows up as a span tree you can click through. When something goes wrong, you can see exactly what the agent did and where it broke.
 
@@ -33,9 +33,9 @@ bash setup.sh          # ~20 min; prompts for API keys, downloads model
 ./ask                  # start chatting
 ```
 
-**Do this before class.** Setup takes 20-30 minutes (model download, dependencies, API keys) and can't be done in a 40-minute session. See [Setup](#setup) for details. There's a [GPU path](#path-a-gpu-instance-all-agents) and an [Ollama path](#path-b-local-ollama-no-gpu) if you don't have GPUs.
+Setup takes 20-30 minutes (model download, dependencies, API keys). See [Setup](#setup) for details. There is a [GPU path](#path-a-gpu-instance-all-agents) and an [Ollama path](#path-b-local-ollama-no-gpu) if you don't have GPUs.
 
-You should see a status line like `Agent: ultrafast | vLLM: OK | NAT: OK | Phoenix: OK`. If anything looks wrong, type `status` for diagnostics. Try asking "What is 2+2?" to confirm the agent responds. You're ready for class.
+You should see a status line like `Agent: ultrafast | vLLM: OK | NAT: OK | Phoenix: OK`. If anything looks wrong, type `status` for diagnostics. Try asking "What is 2+2?" to confirm the agent responds.
 
 ## What to Try
 
@@ -164,7 +164,7 @@ The GPU agents (single, multi, ultrafast) share the full tool set: `internet_sea
 
 Each agent is defined entirely by its YAML config. NAT supports additional architectures (`react_agent`, `router_agent`, `sequential_executor`, etc.). See step 6 for how to experiment.
 
-**Ollama notes:** Qwen3.5 35B-A3B needs ~24 GB disk and ~32 GB RAM. It is a MoE model (35B total / 3B active) from the latest Qwen 3.5 generation — fast inference with strong tool-calling. Vision and audio tools (`describe_image`, `transcribe_audio`) still work because they call external APIs, not the local model. They do require an NGC_API_KEY. For best GAIA accuracy, use the GPU agents.
+**Ollama notes:** Qwen3.5 35B-A3B needs ~24 GB disk and ~32 GB RAM. It is a MoE model (35B total / 3B active) from the latest Qwen 3.5 generation, with fast inference and strong tool-calling. Vision and audio tools (`describe_image`, `transcribe_audio`) still work because they call external APIs, not the local model. They do require an NGC_API_KEY. For best GAIA accuracy, use the GPU agents.
 
 ## Two Question Sets
 
@@ -235,8 +235,8 @@ You should see `Agent: ultrafast | vLLM: OK | NAT: OK | Phoenix: OK`. All agents
 **What you need:**
 - macOS (Apple Silicon M1/M2/M3/M4) or Linux. No GPU required.
 - **32 GB RAM required** (the default 35B-A3B model uses ~24 GB).
-- **2 API keys required**: [Tavily](https://tavily.com/) (search) and [HuggingFace](https://huggingface.co/settings/tokens) (dataset). [NVIDIA Build](https://build.nvidia.com/) is optional — only needed for vision and audio tools.
-- No Ollama pre-install needed — `setup.sh` installs it automatically.
+- **2 API keys required**: [Tavily](https://tavily.com/) (search) and [HuggingFace](https://huggingface.co/settings/tokens) (dataset). [NVIDIA Build](https://build.nvidia.com/) is optional (only needed for vision and audio tools).
+- No Ollama pre-install needed. `setup.sh` installs it automatically.
 
 **Steps:**
 
@@ -307,7 +307,7 @@ bash gaia_tools/gaia_run.sh --history                # all past runs
 
 After a benchmark run your answers are automatically submitted and your team appears on the [student leaderboard](https://huggingface.co/spaces/agents-course/Students_Leaderboard) within seconds. Search for your team name (`NAT-<org>-<team>-<agent>`) to see your score.
 
-The leaderboard shows aggregate scores only — to see which individual questions you got right or wrong, open the local results file:
+The leaderboard shows aggregate scores only. To see which individual questions you got right or wrong, open the local results file:
 
 ```bash
 cat <agent>/runs/latest/gaia_results.json
@@ -356,6 +356,9 @@ bash gaia_tools/gaia_run.sh -c my-agent/config.yml   # your custom config
 .
 ├── setup.sh                            # One-time setup (GPU path)
 ├── ask                                 # Launch script (activates venv, starts chat)
+├── lab/
+│   ├── pre-lab-setup.md                # Step-by-step setup checklist
+│   └── lab-guide.md                    # Full guided lab walkthrough
 ├── gaia_questions.json                 # GAIA test questions (no answers)
 ├── gaia_dev_questions.json             # GAIA dev questions (with answers, for tuning)
 ├── gaia_files/                         # Attached files for GAIA questions
