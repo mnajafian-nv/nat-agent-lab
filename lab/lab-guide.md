@@ -1,6 +1,6 @@
 # Lab Notes: Agent Engineering with NeMo Agent Toolkit
 
-**Prerequisites:** You completed the [pre-lab setup](pre-lab-setup.md). Your GPU instance has vLLM running, Phoenix is up, and `./ask` loads successfully with `Ready. Type a question, or 'help' for commands.`
+**Prerequisites:** You completed the [setup steps](../README.md#setup). Your GPU instance has vLLM running, Phoenix is up, and `./ask` loads successfully with `Ready. Type a question, or 'help' for commands.`
 
 **First:** Pull the latest code to ensure you have all updates.
 

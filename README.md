@@ -21,8 +21,7 @@ The repo ships with four agents that score 85-90% on the leaderboard. They're go
 
 ## For Class Students
 
-- **[Pre-Lab Setup](lab/pre-lab-setup.md)**: step-by-step checklist to complete before the session
-- **[Lab Guide](lab/lab-guide.md)**: full guided walkthrough with Phoenix tracing, failure diagnosis, and benchmarking
+Complete the [Setup](#setup) below, then follow the **[Lab Guide](lab/lab-guide.md)** for a full guided walkthrough with Phoenix tracing, failure diagnosis, and benchmarking.
 
 ## Quick Start
 
@@ -357,7 +356,6 @@ bash gaia_tools/gaia_run.sh -c my-agent/config.yml   # your custom config
 ├── setup.sh                            # One-time setup (GPU path)
 ├── ask                                 # Launch script (activates venv, starts chat)
 ├── lab/
-│   ├── pre-lab-setup.md                # Step-by-step setup checklist
 │   └── lab-guide.md                    # Full guided lab walkthrough
 ├── gaia_questions.json                 # GAIA test questions (no answers)
 ├── gaia_dev_questions.json             # GAIA dev questions (with answers, for tuning)
