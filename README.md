@@ -208,7 +208,15 @@ Type `help` in `./ask` for the full list. Key commands:
 
 ## Setup
 
-### Path A: GPU instance (all agents)
+### Path A: GPU instance (three agents)
+
+This path gives you all three GPU-powered agents, each using MiniMax M2.5 456B MoE served by vLLM:
+
+1. **Single**: flat `tool_calling_agent` with direct access to all tools. Simplest design, no routing overhead.
+2. **Multi**: orchestrator dispatches to three specialist sub-agents (web, file, multimedia). Extra LLM call for routing, but specialists get focused prompts.
+3. **Ultrafast** *(default)*: flat agent with TYPE A/B/C/D routing baked into the system prompt. Same architecture as Single, but prompt-driven classification before each tool call.
+
+The Ollama agent (Path B) is for users without GPUs. If you have a GPU instance, use these three agents.
 
 **What you need:**
 - Linux with **8 GPUs, ~640 GB VRAM total** (e.g., 8x H100 80GB, 8x A100 80GB). Tested on GCP `a3-highgpu-8g` and Brev `8xH100`.
@@ -229,7 +237,9 @@ bash gaia_tools/start_services.sh    # ~5-10 min (vLLM loads model into GPU memo
 
 You should see `Agent: ultrafast | vLLM: OK | NAT: OK | Phoenix: OK`. All agents are available via `switch`.
 
-### Path B: Local Ollama (no GPU)
+### Path B: Local Ollama (one agent, no GPU)
+
+This path gives you a single agent: **Ollama Ultrafast**, which uses the same prompt-driven design as Ultrafast but runs Qwen3.5 35B-A3B locally via Ollama instead of MiniMax M2.5 on GPU. Only the `ollama` agent is available; the three GPU agents (single, multi, ultrafast) require Path A.
 
 **What you need:**
 - macOS (Apple Silicon M1/M2/M3/M4) or Linux. No GPU required.
