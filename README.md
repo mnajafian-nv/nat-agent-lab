@@ -19,6 +19,11 @@ In this lab you'll get hands-on with the problem. You'll run agents against real
 
 The repo ships with four agents that score 85-90% on the leaderboard. They're good but not perfect. Study their configs, read their traces, find where they fail, and build something better.
 
+## For Class Students
+
+- **[Pre-Lab Setup](lab/pre-lab-setup.md)**: step-by-step checklist to complete before the session
+- **[Lab Guide](lab/lab-guide.md)**: full guided walkthrough with Phoenix tracing, failure diagnosis, and benchmarking
+
 ## Quick Start
 
 ```bash
